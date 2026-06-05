@@ -57,7 +57,7 @@ python extract_zim.py path/to/file.zim -o chunks.jsonl --ocr
 python build_index.py chunks.jsonl --db ./vector_db
 ```
 
-Repeat for each ZIM. The index is idempotent — re-running replaces the existing collection.
+Repeat for each ZIM. To replace an existing collection, pass `--replace`.
 
 ### 3. Query
 
@@ -82,7 +82,7 @@ python web.py --db ./vector_db
 ```
 python web.py [options]
 
-  --db PATH              ChromaDB directory (default: ~/kiwix-rag-project/vector_db)
+  --db PATH              ChromaDB directory (default: ./vector_db next to the script)
   --embed-model PATH     Path to embedding model (default: all-MiniLM-L6-v2 from HF cache)
   --model NAME           Ollama model name (default: phi3:mini)
   --ollama-url URL       Ollama base URL (default: http://localhost:11434)
@@ -138,7 +138,7 @@ The workflow uses a shared external SSD rather than SSH rsync (faster for large 
 # Stop Pi services, eject SSD from Pi, connect to Mac, then:
 bash update_pi.sh            # sync vector DB only
 bash update_pi.sh --scripts  # also sync web.py, templates, eval.py
-bash update_pi.sh --kiwix    # also rebuild kiwix library
+bash update_pi.sh --kiwix    # also print the kiwix library rebuild command to run on the Pi
 ```
 
 ### Adding a new ZIM
@@ -164,9 +164,21 @@ python eval.py --url http://localhost:5000
 python eval.py --url http://meshpi.local:5000
 ```
 
-## Batch indexing scripts
+## Batch indexing
 
-`overnight_batch.sh` and `overnight_batch2.sh` were used to index a large library overnight. Edit the `ZIM_DIR` and `OUTPUT_DIR` paths at the top of each script before running.
+`batch_index.sh` processes a queue of ZIM files from a manifest, resuming automatically if interrupted:
+
+```bash
+cp batch_manifest.example batch_manifest.conf
+# edit batch_manifest.conf with your ZIM stems and --ocr flags
+bash batch_index.sh batch_manifest.conf 2>&1 | tee batch_live.log
+```
+
+Override the ZIM directory or venv path with env vars:
+
+```bash
+KIWIX_DIR=/path/to/zims VENV=/path/to/venv/bin/activate bash batch_index.sh batch_manifest.conf
+```
 
 ## OCR support
 

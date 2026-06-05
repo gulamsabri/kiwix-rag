@@ -13,9 +13,27 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+dist/
+build/
+
+# Testing / type checking
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
 
 # macOS
 .DS_Store
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # Claude Code
 .claude/

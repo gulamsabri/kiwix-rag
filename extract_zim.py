@@ -96,7 +96,7 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
             print(f"\r  {i:,} / {total:,} entries scanned ...", end="", flush=True)
 
         try:
-            entry = archive._get_entry_by_id(i)
+            entry = archive._get_entry_by_id(i)  # private API; no public equivalent exists
         except Exception:
             counts["skipped"] += 1
             continue

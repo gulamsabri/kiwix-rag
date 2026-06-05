@@ -18,7 +18,9 @@ Type=simple
 User=pi
 Group=pi
 Environment="HF_HUB_OFFLINE=1"
+WorkingDirectory=/mnt/ssd/kiwix-rag-project
 ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
+    --host 0.0.0.0 \
     --db /mnt/ssd/vector_db \
     --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
     --max-collection-size 500000 \
