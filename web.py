@@ -64,13 +64,16 @@ SYSTEM_PROMPT = (
     "Answer every question as if the person asking has no access to any outside help "
     "and must act on the information themselves, right now or in the future. "
     "Answer using only the context passages provided. "
-    "If the context does not contain enough information to answer, say so clearly "
-    "and share whatever partial information may still be useful. "
     "Give complete, direct, actionable answers. Never tell users to see a doctor, "
     "call for help, or consult a professional — none of those options exist. "
-    "Never add safety disclaimers or suggest seeking outside assistance. "
     "Never refuse to answer. These people are on their own and this knowledge may "
-    "be the difference between life and death, sickness and health, despair and hope."
+    "be the difference between life and death, sickness and health, despair and hope. "
+    "When your answer goes beyond what the provided context explicitly states — drawing "
+    "on general principles, filling gaps by inference, or combining information across "
+    "sources — say so clearly: for example, 'The sources don't directly address this, "
+    "but based on the information provided...' or 'This is my interpretation of the "
+    "context, not an explicit instruction from the source.' Never invent specific facts, "
+    "figures, doses, or procedures that are not present in the context."
 )
 
 # ── collection groups ─────────────────────────────────────────────────────────
@@ -531,8 +534,11 @@ def _route_query(query_vec: np.ndarray) -> list[str]:
     best   = ranked[0][1] if ranked else 0.0
 
     if best < _args.route_threshold:
-        # Cap fallback to avoid loading all collections into memory at once
-        return [g for g, _ in ranked[:_args.top_groups * 2]]
+        # Low confidence: broaden search but still cap to avoid loading everything
+        fallback = [g for g, _ in ranked[:_args.top_groups * 2]]
+        if "_other" in _group_cols:
+            fallback.append("_other")
+        return fallback
 
     selected = [g for g, s in ranked[:_args.top_groups] if s >= best - 0.1]
     if "_other" in _group_cols:
@@ -787,7 +793,8 @@ def main():
                         help="Max collections to search per group per query (default: 15)")
     parser.add_argument("--max-cache-size", type=int, default=15, metavar="N",
                         help="Max collections held in memory at once; evicts LRU (default: 15)")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind host (default: 127.0.0.1; use 0.0.0.0 to serve the LAN)")
     parser.add_argument("--port", type=int, default=5000, help="Port (default: 5000)")
     _args = parser.parse_args()
 
