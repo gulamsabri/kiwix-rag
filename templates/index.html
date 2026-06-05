@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiwix RAG</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f2f5;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #1a1a2e;
+            color: white;
+            padding: 0.75rem 1.25rem;
+            font-size: 1rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        #chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 80%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .message.user     { align-self: flex-end;   align-items: flex-end; }
+        .message.assistant { align-self: flex-start; align-items: flex-start; }
+
+        .bubble {
+            padding: 0.65rem 0.9rem;
+            border-radius: 1rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .user .bubble {
+            background: #2563eb;
+            color: white;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .assistant .bubble {
+            background: white;
+            color: #1a1a1a;
+            border-bottom-left-radius: 0.25rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+
+        .sources {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+
+        .sources span {
+            font-size: 0.72rem;
+            background: #e5e7eb;
+            color: #4b5563;
+            padding: 0.2rem 0.55rem;
+            border-radius: 0.4rem;
+            cursor: default;
+            display: flex;
+            flex-direction: column;
+            gap: 0.05rem;
+            max-width: 28rem;
+        }
+        .sources span .src-title {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sources span .src-zim {
+            font-size: 0.65rem;
+            color: #9ca3af;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 0.45em;
+            height: 1em;
+            background: #9ca3af;
+            vertical-align: text-bottom;
+            border-radius: 1px;
+            animation: blink 0.75s step-end infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        #input-area {
+            padding: 0.75rem 1rem;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: none;
+            line-height: 1.4;
+            max-height: 8rem;
+            outline: none;
+            overflow-y: auto;
+        }
+
+        textarea:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+
+        button {
+            padding: 0.6rem 1.1rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { background: #93c5fd; cursor: default; }
+    </style>
+</head>
+<body>
+    <header>Kiwix RAG</header>
+    <div id="chat"></div>
+    <div id="input-area">
+        <textarea id="input" placeholder="Ask a question… (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+        <button id="send">Send</button>
+    </div>
+
+    <script>
+        const chat    = document.getElementById("chat");
+        const input   = document.getElementById("input");
+        const sendBtn = document.getElementById("send");
+
+        input.addEventListener("input", () => {
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+        });
+
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+            }
+        });
+
+        sendBtn.addEventListener("click", submit);
+
+        function addMessage(role, text) {
+            const wrap   = document.createElement("div");
+            wrap.className = `message ${role}`;
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            if (text) bubble.textContent = text;
+            wrap.appendChild(bubble);
+            chat.appendChild(wrap);
+            scrollDown();
+            return { wrap, bubble };
+        }
+
+        function scrollDown() {
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function submit() {
+            const q = input.value.trim();
+            if (!q || sendBtn.disabled) return;
+
+            addMessage("user", q);
+            input.value = "";
+            input.style.height = "auto";
+            sendBtn.disabled = true;
+
+            const { wrap, bubble } = addMessage("assistant", "");
+            const cursor = document.createElement("span");
+            cursor.className = "cursor";
+            bubble.appendChild(cursor);
+
+            const sourcesDiv = document.createElement("div");
+            sourcesDiv.className = "sources";
+            wrap.appendChild(sourcesDiv);
+
+            scrollDown();
+
+            const es = new EventSource("/ask?q=" + encodeURIComponent(q));
+
+            es.onmessage = (e) => {
+                if (e.data === "[DONE]") {
+                    es.close();
+                    cursor.remove();
+                    sendBtn.disabled = false;
+                    input.focus();
+                    return;
+                }
+                const msg = JSON.parse(e.data);
+                if (msg.token !== undefined) {
+                    bubble.insertBefore(document.createTextNode(msg.token), cursor);
+                }
+                if (msg.sources) {
+                    msg.sources.forEach(s => {
+                        const chip = document.createElement("span");
+                        chip.title = s.zim + "\n" + s.source;
+                        const titleEl = document.createElement("span");
+                        titleEl.className = "src-title";
+                        titleEl.textContent = s.title;
+                        const zimEl = document.createElement("span");
+                        zimEl.className = "src-zim";
+                        zimEl.textContent = s.zim + (s.source ? "  ·  " + s.source : "");
+                        chip.appendChild(titleEl);
+                        chip.appendChild(zimEl);
+                        sourcesDiv.appendChild(chip);
+                    });
+                }
+                scrollDown();
+            };
+
+            es.onerror = () => {
+                es.close();
+                cursor.remove();
+                if (!bubble.textContent.trim()) bubble.textContent = "[Connection error]";
+                sendBtn.disabled = false;
+            };
+        }
+    </script>
+</body>
+</html>

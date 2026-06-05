@@ -1,0 +1,16 @@
+# Core
+chromadb
+sentence-transformers
+flask
+requests
+numpy
+
+# ZIM extraction
+libzim
+beautifulsoup4
+langchain-text-splitters
+pypdf
+
+# OCR (optional — only needed if using --ocr flag with extract_zim.py)
+# easyocr       # pip install easyocr
+# pytesseract   # pip install pytesseract  (also: brew install tesseract)
