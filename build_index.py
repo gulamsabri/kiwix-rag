@@ -36,13 +36,57 @@ def count_lines(jsonl_path: Path) -> int:
         return sum(1 for line in f if line.strip())
 
 
+def _copy_collection_batched(client, src_name: str, dst_name: str) -> None:
+    """Copy all vectors from src_name into a newly created dst_name collection."""
+    src = client.get_collection(src_name)
+    total = src.count()
+    dst = client.get_or_create_collection(dst_name, metadata={"hnsw:space": "cosine"})
+    offset = 0
+    while True:
+        result = src.get(
+            limit=COPY_BATCH,
+            offset=offset,
+            include=["embeddings", "documents", "metadatas"],
+        )
+        if not result["ids"]:
+            break
+        dst.add(
+            ids=result["ids"],
+            embeddings=result["embeddings"],
+            documents=result["documents"],
+            metadatas=result["metadatas"],
+        )
+        offset += len(result["ids"])
+        if total and offset < total:
+            print(f"\r  backing up {offset:,} / {total:,}", end="", flush=True)
+    if offset:
+        print()
+
+
 def swap_collection(client, build_name: str, final_name: str, total: int) -> None:
     """
     Promote build_name → final_name without re-embedding.
-    ChromaDB has no rename, so we copy vectors in batches then delete the temp.
+
+    ChromaDB has no atomic rename, so the swap happens in three steps:
+      1. Copy existing final → final__prev  (preserves old index if copy dies mid-way)
+      2. Delete final, then copy build → final
+      3. Verify count, then delete build and final__prev
+
+    If the process dies between steps 2 and 3, final__prev can be manually
+    renamed back to final_name to restore the previous index.
     """
-    existing = [c.name for c in client.list_collections()]
+    backup_name = f"{final_name}__prev"
+    existing = {c.name for c in client.list_collections()}
+
+    # Clean up any leftover backup from a previously failed swap
+    if backup_name in existing:
+        print(f"Removing leftover backup '{backup_name}' from a previous interrupted run...")
+        client.delete_collection(backup_name)
+
+    # Preserve the live collection as a backup before we touch it
     if final_name in existing:
+        print(f"Preserving existing collection as '{backup_name}'...")
+        _copy_collection_batched(client, final_name, backup_name)
         client.delete_collection(final_name)
 
     src = client.get_collection(build_name)
@@ -68,8 +112,18 @@ def swap_collection(client, build_name: str, final_name: str, total: int) -> Non
         if offset < total:
             print(f"\r  {offset:,} / {total:,} copied", end="", flush=True)
 
+    final_count = dst.count()
+    if final_count != total:
+        raise RuntimeError(
+            f"Promotion count mismatch: expected {total}, got {final_count}. "
+            f"Previous index is preserved at '{backup_name}'."
+        )
+
     client.delete_collection(build_name)
-    print(f"\r  {dst.count():,} vectors promoted.          ")
+    existing_now = {c.name for c in client.list_collections()}
+    if backup_name in existing_now:
+        client.delete_collection(backup_name)
+    print(f"\r  {final_count:,} vectors promoted.          ")
 
 
 def main():

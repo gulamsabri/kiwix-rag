@@ -29,8 +29,10 @@ try:
 except ImportError:
     _PYPDF_AVAILABLE = False
 
-# Tags that add noise without useful text
-_NOISE_TAGS = ["script", "style", "nav", "header", "footer", "figure", "table"]
+# Tags that add noise without useful text.
+# Note: "table" is intentionally excluded — tables often contain primary reference
+# content (dosage tables, spec matrices, CLI options). get_text() extracts cell text.
+_NOISE_TAGS = ["script", "style", "nav", "header", "footer", "figure"]
 
 # PDFs with fewer characters than this per page are likely scanned images
 _PDF_MIN_CHARS_PER_PAGE = 100

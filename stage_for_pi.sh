@@ -16,12 +16,13 @@ DEST_MODELS="$SSD/ollama-models"
 DEST_HF="$SSD/hf-cache"
 DEST_SCRIPTS="$SSD/kiwix-rag-project"
 
-SRC_DB="$HOME/kiwix-rag-project/vector_db"
+SCRIPTS_SRC="$HOME/kiwix-rag-project"
+SRC_DB="$SCRIPTS_SRC/vector_db"
 SRC_MODELS="${OLLAMA_MODELS:-$HOME/.ollama/models}"   # macOS default; Linux is ~/.local/ollama/models
 SRC_HF="$HOME/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2"
-SRC_SCRIPT="$HOME/kiwix-rag-project/rag.py"
-SRC_WEB="$HOME/kiwix-rag-project/web.py"
-SRC_TEMPLATES="$HOME/kiwix-rag-project/templates"
+SRC_SCRIPT="$SCRIPTS_SRC/rag.py"
+SRC_WEB="$SCRIPTS_SRC/web.py"
+SRC_TEMPLATES="$SCRIPTS_SRC/templates"
 
 # ── preflight ─────────────────────────────────────────────────────────────────
 
