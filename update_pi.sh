@@ -63,7 +63,7 @@ echo ""
 
 if $sync_scripts; then
     echo "━━━ Syncing scripts ━━━"
-    for f in rag.py web.py eval.py; do
+    for f in rag.py web.py eval.py requirements.txt; do
         cp "$SCRIPTS_SRC/$f" "$SCRIPTS_DEST/$f" && echo "  $f"
     done
     rsync -ah --delete \
