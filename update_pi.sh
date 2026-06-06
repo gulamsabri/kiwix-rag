@@ -6,8 +6,8 @@
 #   2. Safely eject SSD from Pi, connect to Mac
 #   3. Run this script
 #   4. Eject SSD from Mac, reconnect to Pi
-#   5. Pi services restart automatically (fstab auto-mounts SSD on reconnect)
-#      OR run: ssh pi@meshpi.local "sudo systemctl start kiwix-rag kiwix-serve"
+#   5. Run the SSH command printed at the end of this script to push the
+#      updated vector_db to its live location and restart services
 #
 # Usage:
 #   bash update_pi.sh                 # sync vector DB only
@@ -29,6 +29,9 @@ SSD="/Volumes/Extreme SSD"
 PI="pi@meshpi.local"
 SCRIPTS_SRC="$HOME/kiwix-rag-project"
 SCRIPTS_DEST="$SSD/kiwix-rag-project"
+
+# Destination path for vector_db on the Pi (overridable via env var)
+PI_DB_DEST="${PI_DB_DEST:-/mnt/nvme/vector_db}"
 
 sync_scripts=false
 rebuild_kiwix=false
@@ -78,7 +81,7 @@ fi
 echo "━━━ Sync complete ━━━"
 echo "Eject the SSD from this Mac, reconnect to the Pi, then:"
 if $rebuild_kiwix; then
-    echo "  ssh $PI 'bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
+    echo "  ssh $PI 'rsync -a --delete /mnt/ssd/vector_db/ $PI_DB_DEST/ && bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
 else
-    echo "  ssh $PI 'sudo systemctl restart kiwix-rag'"
+    echo "  ssh $PI 'rsync -a --delete /mnt/ssd/vector_db/ $PI_DB_DEST/ && sudo systemctl restart kiwix-rag'"
 fi
