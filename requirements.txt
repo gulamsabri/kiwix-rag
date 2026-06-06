@@ -1,0 +1,21 @@
+# Core
+chromadb
+sentence-transformers
+flask
+requests
+numpy
+
+# ZIM extraction
+libzim
+beautifulsoup4
+langchain-text-splitters
+pypdf
+
+# OCR (optional — only needed if using --ocr flag with extract_zim.py)
+# Install all three for tesseract engine:
+#   pip install pymupdf opencv-python-headless pillow pytesseract
+#   macOS:  brew install tesseract
+#   Linux:  sudo apt install tesseract-ocr
+#
+# Or for the pure-Python easyocr engine (no binary needed):
+#   pip install pymupdf opencv-python-headless easyocr

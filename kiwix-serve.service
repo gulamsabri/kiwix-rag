@@ -1,0 +1,24 @@
+# ── Edit these to match your setup ──────────────────────────────────────────
+# User/Group:   your Pi username
+# --library:    path to the library XML built by build_kiwix_library.sh
+# RequiresMountsFor: your SSD mount point (or remove if running from SD card)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=Kiwix Library Server
+After=network.target
+RequiresMountsFor=/mnt/ssd
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+ExecStart=/usr/bin/kiwix-serve --library /mnt/ssd/library.xml --port 8080
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiwix-serve
+
+[Install]
+WantedBy=multi-user.target
