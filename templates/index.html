@@ -252,7 +252,14 @@
             es.onerror = () => {
                 es.close();
                 cursor.remove();
-                if (!bubble.textContent.trim()) bubble.textContent = "[Connection error]";
+                if (!bubble.textContent.trim()) {
+                    bubble.textContent = "[Connection error — the server may be unavailable]";
+                    const retryBtn = document.createElement("button");
+                    retryBtn.textContent = "Retry";
+                    retryBtn.style.cssText = "margin-left:8px;font-size:0.85em;cursor:pointer;";
+                    retryBtn.onclick = () => { wrap.remove(); input.value = q; submit(); };
+                    bubble.appendChild(retryBtn);
+                }
                 sendBtn.disabled = false;
             };
         }

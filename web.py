@@ -688,6 +688,7 @@ def ask():
             "system": SYSTEM_PROMPT,
             "prompt": build_prompt(question, chunks),
             "stream": True,
+            "keep_alive": -1,
         }
         try:
             with requests.post(
@@ -708,6 +709,10 @@ def ask():
             yield sse({"token": "\n[Error: could not reach Ollama — is it running?]"})
         except requests.exceptions.ReadTimeout:
             yield sse({"token": "\n[Error: Ollama timed out — the model may need more time on this hardware]"})
+        except requests.exceptions.HTTPError as e:
+            yield sse({"token": "\n[Error: the language model returned an error — please try again]"})
+        except Exception as e:
+            yield sse({"token": f"\n[Error: {e}]"})
 
         seen, sources = [], []
         for c in chunks:
@@ -745,6 +750,7 @@ def api_ask():
         "system": SYSTEM_PROMPT,
         "prompt": build_prompt(question, chunks),
         "stream": False,
+        "keep_alive": -1,
     }
     try:
         resp = requests.post(f"{_args.ollama_url}/api/generate", json=payload, timeout=_args.timeout)
