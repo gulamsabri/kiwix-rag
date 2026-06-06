@@ -78,10 +78,15 @@ def swap_collection(client, build_name: str, final_name: str, total: int) -> Non
     backup_name = f"{final_name}__prev"
     existing = {c.name for c in client.list_collections()}
 
-    # Clean up any leftover backup from a previously failed swap
+    # A leftover backup means a previous swap was interrupted after the live
+    # collection was deleted but before the new one finished copying. That backup
+    # is the last known-good index — never destroy it automatically.
     if backup_name in existing:
-        print(f"Removing leftover backup '{backup_name}' from a previous interrupted run...")
-        client.delete_collection(backup_name)
+        raise RuntimeError(
+            f"Found leftover backup '{backup_name}' from an interrupted promotion.\n"
+            f"Inspect '{final_name}' (may be partial) and '{backup_name}' (last known-good),\n"
+            f"then manually delete the bad one before retrying --replace."
+        )
 
     # Preserve the live collection as a backup before we touch it
     if final_name in existing:
