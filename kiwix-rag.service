@@ -1,0 +1,36 @@
+# ── Edit these to match your setup ──────────────────────────────────────────
+# User/Group:   your Pi username
+# ExecStart:    path to your venv Python and the script on your SSD
+# --db:         ChromaDB directory
+# --embed-model: directory containing the all-MiniLM-L6-v2 snapshot
+# --model:      Ollama model name (run `ollama list` to see installed models)
+# RequiresMountsFor: your SSD mount point (or remove if running from SD card)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=Kiwix RAG Web Interface
+After=network.target ollama.service
+Requires=ollama.service
+RequiresMountsFor=/mnt/ssd
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+Environment="HF_HUB_OFFLINE=1"
+WorkingDirectory=/mnt/ssd/kiwix-rag-project
+ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
+    --host 0.0.0.0 \
+    --db /mnt/ssd/vector_db \
+    --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
+    --max-collection-size 500000 \
+    --model llama3.2:3b \
+    --top-k 3
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiwix-rag
+
+[Install]
+WantedBy=multi-user.target

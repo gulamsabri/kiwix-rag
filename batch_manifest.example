@@ -1,0 +1,32 @@
+# batch_manifest.example — template for batch_index.sh
+#
+# Copy this to batch_manifest.conf (gitignored) and edit for your library.
+# Override defaults with env vars before running:
+#   KIWIX_DIR=/path/to/your/zims bash batch_index.sh batch_manifest.conf
+#
+# Format:
+#   <zim_stem>           — ZIM filename without the .zim extension
+#   <zim_stem> --ocr     — enable OCR (for scanned PDFs inside the ZIM)
+#
+# Lines starting with # and blank lines are ignored.
+# Order determines processing priority — put smaller/faster ZIMs first
+# so you have usable collections if the run is interrupted.
+
+# ── Tier 1: small HTML-only content (fast, no OCR) ──────────────────────────
+devdocs_en_python_2025-04
+devdocs_en_bash_2025-04
+devdocs_en_javascript_2025-04
+
+# ── Tier 2: survival content (OCR needed for scanned PDFs) ──────────────────
+zimgit-medicine_en_2024-08 --ocr
+zimgit-water_en_2024-08 --ocr
+zimgit-knots_en_2024-08 --ocr
+
+# ── Tier 3: Stack Exchange sites ─────────────────────────────────────────────
+cooking.stackexchange.com_en_all_2024-11
+health.stackexchange.com_en_all_2024-05
+electronics.stackexchange.com_en_all_2024-11
+
+# ── Tier 4: large content (time permitting) ───────────────────────────────────
+physics.stackexchange.com_en_all_2024-10
+libretexts.org_en_phys_2025-01
