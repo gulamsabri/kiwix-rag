@@ -3,8 +3,9 @@ vector_db/
 *.jsonl
 *.log
 
-# Local batch manifest (contains paths specific to your library)
+# Local batch manifest and personal ops reference (specific to this installation)
 batch_manifest.conf
+ops-reference.md
 
 # Python
 __pycache__/
