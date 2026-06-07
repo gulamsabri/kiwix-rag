@@ -34,10 +34,12 @@ _TARGET_NAMES = {f"{TARGET_PREFIX}_{cat}" for cat in CATEGORIES}
 
 
 def find_source_collections(client) -> list[str]:
-    """Return all survivorlibrary_* collections that aren't topic collections."""
+    """Return survivorlibrary batch collections (name contains _chunks) that aren't topic targets."""
     return sorted(
         c.name for c in client.list_collections()
-        if "survivorlibrary" in c.name and c.name not in _TARGET_NAMES
+        if "survivorlibrary" in c.name
+        and "_chunks" in c.name
+        and c.name not in _TARGET_NAMES
     )
 
 FETCH_BATCH = 200   # small because we're fetching embedding vectors
