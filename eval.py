@@ -223,6 +223,41 @@ TEST_CASES = [
         "note": "Statistics — libretexts_stats / scicomp SE",
     },
 
+    # ── survivorlibrary ───────────────────────────────────────────────────────
+    # These target pre-1923 public-domain content (field manuals, homesteading
+    # books, herbal guides) that is survivorlibrary's core material.
+    # Keywords are kept simple to tolerate OCR artifacts.
+    {
+        "group": "survivorlibrary",
+        "question": "How do you preserve meat by smoking or salt curing without refrigeration?",
+        "expected": ["smoke", "salt", "cure", "meat"],
+        "note": "Salt/smoke curing — survivorlibrary homesteading books",
+    },
+    {
+        "group": "survivorlibrary",
+        "question": "How do you make lye soap from wood ash and animal fat?",
+        "expected": ["ash", "lye", "fat", "soap"],
+        "note": "Soap-making — survivorlibrary household / craft books",
+    },
+    {
+        "group": "survivorlibrary",
+        "question": "How do you tan animal hides to produce leather?",
+        "expected": ["hide", "tan", "scrape", "bark"],
+        "note": "Tanning — survivorlibrary craft / trade books",
+    },
+    {
+        "group": "survivorlibrary",
+        "question": "What are common medicinal uses of willow bark?",
+        "expected": ["pain", "fever", "bark", "willow"],
+        "note": "Herbal medicine — survivorlibrary botanical / materia medica books",
+    },
+    {
+        "group": "survivorlibrary",
+        "question": "How do you store grain long-term to prevent spoilage from moisture and pests?",
+        "expected": ["dry", "moisture", "grain", "store"],
+        "note": "Grain storage — survivorlibrary farming / agriculture books",
+    },
+
     # ── repair ────────────────────────────────────────────────────────────────
     {
         "group": "repair",

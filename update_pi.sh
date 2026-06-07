@@ -25,13 +25,13 @@
 
 set -euo pipefail
 
-SSD="/Volumes/Extreme SSD"
-PI="pi@meshpi.local"
+SSD="${SSD:-/Volumes/Extreme SSD}"
+PI="${PI:-pi@meshpi.local}"
 SCRIPTS_SRC="$HOME/kiwix-rag-project"
 SCRIPTS_DEST="$SSD/kiwix-rag-project"
 
-# Destination path for vector_db on the Pi (overridable via env var)
-PI_DB_DEST="${PI_DB_DEST:-/mnt/nvme/vector_db}"
+# Path where the vector_db lives on the Pi (must match --db arg in the service file)
+PI_DB_DEST="${PI_DB_DEST:-/mnt/ssd/vector_db}"
 
 sync_scripts=false
 rebuild_kiwix=false
@@ -81,7 +81,7 @@ fi
 echo "━━━ Sync complete ━━━"
 echo "Eject the SSD from this Mac, reconnect to the Pi, then:"
 if $rebuild_kiwix; then
-    echo "  ssh $PI 'rsync -a --delete /mnt/ssd/vector_db/ $PI_DB_DEST/ && bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
+    echo "  ssh $PI 'bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
 else
-    echo "  ssh $PI 'rsync -a --delete /mnt/ssd/vector_db/ $PI_DB_DEST/ && sudo systemctl restart kiwix-rag'"
+    echo "  ssh $PI 'sudo systemctl restart kiwix-rag'"
 fi

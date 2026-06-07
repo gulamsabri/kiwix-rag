@@ -5,8 +5,9 @@
 #   KIWIX_DIR=/path/to/your/zims bash batch_index.sh batch_manifest.conf
 #
 # Format:
-#   <zim_stem>           — ZIM filename without the .zim extension
-#   <zim_stem> --ocr     — enable OCR (for scanned PDFs inside the ZIM)
+#   <zim_stem>                    — ZIM filename without the .zim extension
+#   <zim_stem> --ocr              — enable OCR (for scanned PDFs inside the ZIM)
+#   <zim_stem> --ocr --filter     — also drop ad/conspiracy chunks at extraction time
 #
 # Lines starting with # and blank lines are ignored.
 # Order determines processing priority — put smaller/faster ZIMs first
@@ -17,10 +18,11 @@ devdocs_en_python_2025-04
 devdocs_en_bash_2025-04
 devdocs_en_javascript_2025-04
 
-# ── Tier 2: survival content (OCR needed for scanned PDFs) ──────────────────
+# ── Tier 2: survival content (OCR + quality filter for mixed/magazine sources) ─
 zimgit-medicine_en_2024-08 --ocr
 zimgit-water_en_2024-08 --ocr
 zimgit-knots_en_2024-08 --ocr
+# survivorlibrary.com_en_all_2025-03 --ocr --filter  ← use --filter for this one
 
 # ── Tier 3: Stack Exchange sites ─────────────────────────────────────────────
 cooking.stackexchange.com_en_all_2024-11
