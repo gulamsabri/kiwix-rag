@@ -30,9 +30,6 @@ PI="${PI:-pi@meshpi.local}"
 SCRIPTS_SRC="$HOME/kiwix-rag-project"
 SCRIPTS_DEST="$SSD/kiwix-rag-project"
 
-# Path where the vector_db lives on the Pi (must match --db arg in the service file)
-PI_DB_DEST="${PI_DB_DEST:-/mnt/ssd/vector_db}"
-
 sync_scripts=false
 rebuild_kiwix=false
 
@@ -73,6 +70,7 @@ if $sync_scripts; then
         "$SCRIPTS_SRC/templates/" \
         "$SCRIPTS_DEST/templates/"
     echo "  templates/"
+    cp "$SCRIPTS_SRC/kiwix-rag.service" "$SCRIPTS_DEST/kiwix-rag.service" && echo "  kiwix-rag.service"
     echo ""
 fi
 
@@ -81,7 +79,12 @@ fi
 echo "━━━ Sync complete ━━━"
 echo "Eject the SSD from this Mac, reconnect to the Pi, then:"
 if $rebuild_kiwix; then
-    echo "  ssh $PI 'bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
+    echo "  ssh $PI 'sudo cp /mnt/ssd/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload && bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
 else
     echo "  ssh $PI 'sudo systemctl restart kiwix-rag'"
+    if $sync_scripts; then
+        echo ""
+        echo "  If the service file changed, also run:"
+        echo "  ssh $PI 'sudo cp /mnt/ssd/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kiwix-rag'"
+    fi
 fi
