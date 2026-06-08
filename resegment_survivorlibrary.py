@@ -270,17 +270,22 @@ _FILENAME_RULES: list[tuple[str, list[str]]] = [
 
 def classify(source: str) -> str:
     """Return the category name for a chunk's source path."""
-    name = source.split("/")[-1].lower().replace(".pdf", "").replace(".html", "")
+    parts = [p.lower().replace(".pdf", "").replace(".html", "") for p in source.split("/") if p]
 
     # Empty or navigation junk → reference
+    if not parts:
+        return "reference"
+    name = parts[-1]
     if not name or name.startswith("?") or name.startswith("index.php"):
         return "reference"
 
-    # Exact directory-level match
-    if name in _DIRECTORY_MAP:
-        return _DIRECTORY_MAP[name]
+    # Check every path component against the directory map — the key is usually a
+    # directory name like "farming", not the filename inside it.
+    for part in parts:
+        if part in _DIRECTORY_MAP:
+            return _DIRECTORY_MAP[part]
 
-    # Keyword scan in priority order
+    # Keyword scan on the filename in priority order
     for category, keywords in _FILENAME_RULES:
         if any(kw in name for kw in keywords):
             return category
