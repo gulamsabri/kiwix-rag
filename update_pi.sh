@@ -79,7 +79,12 @@ fi
 echo "━━━ Sync complete ━━━"
 echo "Eject the SSD from this Mac, reconnect to the Pi, then:"
 if $rebuild_kiwix; then
-    echo "  ssh $PI 'sudo cp /mnt/ssd/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload && bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
+    echo "  ssh $PI 'bash ~/build_kiwix_library.sh && sudo systemctl restart kiwix-rag kiwix-serve'"
+    if $sync_scripts; then
+        echo ""
+        echo "  If the service file changed, also run first:"
+        echo "  ssh $PI 'sudo cp /mnt/ssd/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload'"
+    fi
 else
     echo "  ssh $PI 'sudo systemctl restart kiwix-rag'"
     if $sync_scripts; then
