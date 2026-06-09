@@ -351,7 +351,7 @@ def build_collections(client, source_cols, dry_run: bool) -> dict[str, int]:
                     buf["metadatas"].append(meta)
 
                     if len(buf["ids"]) >= 500:
-                        targets[cat].add(**buf)
+                        targets[cat].upsert(**buf)
                         buf["ids"].clear(); buf["embeddings"].clear()
                         buf["documents"].clear(); buf["metadatas"].clear()
 
@@ -365,7 +365,7 @@ def build_collections(client, source_cols, dry_run: bool) -> dict[str, int]:
         # Flush remaining buffers
         for cat, buf in buffers.items():
             if buf["ids"]:
-                targets[cat].add(**buf)
+                targets[cat].upsert(**buf)
 
     return counts
 
@@ -394,10 +394,20 @@ def main():
     target_names = [f"{TARGET_PREFIX}_{cat}" for cat in CATEGORIES]
     existing_targets = [n for n in target_names if n in existing]
     if existing_targets and not args.dry_run:
-        print("WARNING: the following target collections already exist and will be appended to:")
+        print("NOTE: the following target collections already exist; new chunks will be upserted:")
         for n in existing_targets:
             print(f"  {n}")
-        print("Delete them first if you want a clean build.\n")
+        print("Use --drop-old after a clean run if you want to rebuild from scratch.\n")
+
+    # Snapshot pre-existing target counts so verification can be accurate on reruns
+    pre_existing: dict[str, int] = {}
+    if not args.dry_run:
+        for cat in CATEGORIES:
+            name = f"{TARGET_PREFIX}_{cat}"
+            try:
+                pre_existing[cat] = client.get_collection(name).count()
+            except Exception:
+                pre_existing[cat] = 0
 
     mode = "DRY RUN" if args.dry_run else "LIVE BUILD"
     print(f"Mode:    {mode}")
@@ -425,9 +435,10 @@ def main():
         for cat in CATEGORIES:
             col = client.get_collection(f"{TARGET_PREFIX}_{cat}")
             actual = col.count()
-            status = "✓" if actual == counts[cat] else f"MISMATCH (expected {counts[cat]})"
+            expected = pre_existing[cat] + counts[cat]
+            status = "✓" if actual == expected else f"MISMATCH (expected {expected})"
             print(f"  {TARGET_PREFIX}_{cat}: {actual:,}  {status}")
-            if actual != counts[cat]:
+            if actual != expected:
                 ok = False
 
         if ok and args.drop_old:
