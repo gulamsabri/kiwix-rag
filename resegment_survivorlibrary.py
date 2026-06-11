@@ -399,16 +399,6 @@ def main():
             print(f"  {n}")
         print("Use --drop-old after a clean run if you want to rebuild from scratch.\n")
 
-    # Snapshot pre-existing target counts so verification can be accurate on reruns
-    pre_existing: dict[str, int] = {}
-    if not args.dry_run:
-        for cat in CATEGORIES:
-            name = f"{TARGET_PREFIX}_{cat}"
-            try:
-                pre_existing[cat] = client.get_collection(name).count()
-            except Exception:
-                pre_existing[cat] = 0
-
     mode = "DRY RUN" if args.dry_run else "LIVE BUILD"
     print(f"Mode:    {mode}")
     print(f"DB:      {args.db}")
@@ -435,7 +425,10 @@ def main():
         for cat in CATEGORIES:
             col = client.get_collection(f"{TARGET_PREFIX}_{cat}")
             actual = col.count()
-            expected = pre_existing[cat] + counts[cat]
+            # counts[cat] = total unique IDs classified to this category across all sources.
+            # After upsert, the target always holds exactly that many distinct entries,
+            # regardless of whether this is a first run or a rerun over previously-seen sources.
+            expected = counts[cat]
             status = "✓" if actual == expected else f"MISMATCH (expected {expected})"
             print(f"  {TARGET_PREFIX}_{cat}: {actual:,}  {status}")
             if actual != expected:
