@@ -265,6 +265,57 @@ TEST_CASES = [
         "expected": ["teeth", "slider", "wax", "pencil"],
         "note": "Repair — crafts SE / ifixit",
     },
+
+    # ── survivorlibrary_medicine (e00001000) ──────────────────────────────────
+    # Surgery manuals, pharmacy treatises, physiology/midwifery texts 1871–1917.
+    {
+        "group": "survivorlibrary_medicine",
+        "question": "What are the signs of wound infection after an injury and how should it be treated?",
+        "expected": ["fever", "pus", "wound", "inflammation"],
+        "note": "Surgical wound management — a_new_manual_of_surgery-civil_and_military_1917, a_manual_of_surgery_for_students_and_physicians_1915",
+    },
+    {
+        "group": "survivorlibrary_medicine",
+        "question": "What were the historical medical uses of digitalis from the foxglove plant?",
+        "expected": ["heart", "dropsy", "leaf", "dose"],
+        "note": "Cardiac pharmacology — a_manual_of_practical_therapeutics_1871, a_treatise_on_pharmacy_1874",
+    },
+    {
+        "group": "survivorlibrary_medicine",
+        "question": "How was a fractured bone set and splinted in field surgery before modern hospitals?",
+        "expected": ["fracture", "bone", "splint", "limb"],
+        "note": "Orthopedic field surgery — a_new_manual_of_surgery-civil_and_military_1917",
+    },
+
+    # ── survivorlibrary_mechanics (e00002000) ─────────────────────────────────
+    # Appleton's Cyclopaedia of Applied Mechanics 1880 — pulleys, levers, gears.
+    {
+        "group": "survivorlibrary_mechanics",
+        "question": "How does a block and tackle pulley system multiply force to lift heavy loads?",
+        "expected": ["pulley", "rope", "load", "mechanical"],
+        "note": "Applied mechanics — appletons_cyclopaedia_of_applied_mechanics_1880",
+    },
+    {
+        "group": "survivorlibrary_mechanics",
+        "question": "What is mechanical advantage and how is it calculated for a simple lever?",
+        "expected": ["lever", "fulcrum", "force", "arm"],
+        "note": "Lever mechanics — appletons_cyclopaedia_of_applied_mechanics_1880",
+    },
+
+    # ── survivorlibrary_trades (e00002500) ────────────────────────────────────
+    # British Bee Journal 1880s–1920s; Canadian Foundryman vol 9–12 1918–1921.
+    {
+        "group": "survivorlibrary_trades",
+        "question": "How do you prevent a bee colony from swarming and losing half the hive?",
+        "expected": ["queen", "swarm", "hive", "colony"],
+        "note": "Beekeeping colony management — british_bee_journal volumes 1880s–1920s",
+    },
+    {
+        "group": "survivorlibrary_trades",
+        "question": "What is the difference between cast iron and wrought iron in metalworking?",
+        "expected": ["carbon", "iron", "wrought", "cast"],
+        "note": "Foundry metallurgy — canadian_foundryman vol 9–12 1918–1921",
+    },
 ]
 
 
