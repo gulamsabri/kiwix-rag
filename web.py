@@ -831,15 +831,14 @@ def main():
         sys.exit(1)
 
     if _args.max_collection_size is not None:
-        conn = sqlite3.connect(str(db_path / "chroma.sqlite3"))
-        rows = conn.execute(
-            "SELECT c.name, COUNT(e.id) FROM collections c "
-            "JOIN segments s ON s.collection = c.id "
-            "JOIN embeddings e ON e.segment_id = s.id "
-            "GROUP BY c.id"
-        ).fetchall()
-        conn.close()
-        sizes = {name: count for name, count in rows}
+        # Use per-collection count() calls rather than one bulk SQL aggregate.
+        # The aggregate query does a full scan of the entire embeddings table;
+        # individual count() calls hit a per-segment index and are much faster
+        # on large databases served from a USB SSD.
+        print(f"Checking collection sizes (max {_args.max_collection_size:,})...")
+        sizes = {}
+        for n in names:
+            sizes[n] = client.get_collection(n).count()
         skipped = [n for n in names if not (0 < sizes.get(n, 0) <= _args.max_collection_size)]
         names   = [n for n in names if  0 < sizes.get(n, 0) <= _args.max_collection_size]
         if skipped:
