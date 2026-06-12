@@ -100,7 +100,7 @@ def build(client, dry_run: bool) -> dict[str, int]:
                 buf["metadatas"].append(meta)
 
                 if len(buf["ids"]) >= 500:
-                    targets[decade].add(**buf)
+                    targets[decade].upsert(**buf)
                     buf["ids"].clear(); buf["embeddings"].clear()
                     buf["documents"].clear(); buf["metadatas"].clear()
 
@@ -113,7 +113,7 @@ def build(client, dry_run: bool) -> dict[str, int]:
     if not dry_run:
         for d, buf in buffers.items():
             if buf["ids"]:
-                targets[d].add(**buf)
+                targets[d].upsert(**buf)
 
     return counts
 
@@ -135,10 +135,10 @@ def main():
     existing = {c.name for c in client.list_collections()}
     existing_targets = [n for n in _TARGET_NAMES if n in existing]
     if existing_targets and not args.dry_run:
-        print("WARNING: target collections already exist and will be appended to:")
+        print("NOTE: target collections already exist; chunks will be upserted (safe to rerun):")
         for n in sorted(existing_targets):
             print(f"  {n}")
-        print("Delete them first for a clean build.\n")
+        print()
 
     mode = "DRY RUN" if args.dry_run else "LIVE BUILD"
     print(f"Mode: {mode}")

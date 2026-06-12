@@ -19,7 +19,8 @@ from sentence_transformers import SentenceTransformer
 
 EMBED_MODEL = "all-MiniLM-L6-v2"  # 80MB, fast, runs well on Pi 5
 BATCH_SIZE = 256
-COPY_BATCH = 1000  # batch size when swapping temp → final collection
+COPY_BATCH = 1000   # batch size when fetching vectors during collection swap
+ID_FETCH_BATCH = 10_000  # batch size for ID-only pagination (no vectors, much lighter)
 
 
 def iter_chunks(jsonl_path: Path):
@@ -36,30 +37,41 @@ def count_lines(jsonl_path: Path) -> int:
         return sum(1 for line in f if line.strip())
 
 
+def _iter_ids(collection) -> list[str]:
+    """Return all IDs in a collection using lightweight offset pagination (no vectors)."""
+    ids: list[str] = []
+    offset = 0
+    while True:
+        page = collection.get(limit=ID_FETCH_BATCH, offset=offset, include=[])
+        if not page["ids"]:
+            break
+        ids.extend(page["ids"])
+        offset += len(page["ids"])
+    return ids
+
+
 def _copy_collection_batched(client, src_name: str, dst_name: str) -> None:
     """Copy all vectors from src_name into a newly created dst_name collection."""
     src = client.get_collection(src_name)
-    total = src.count()
     dst = client.get_or_create_collection(dst_name, metadata={"hnsw:space": "cosine"})
-    offset = 0
-    while True:
-        result = src.get(
-            limit=COPY_BATCH,
-            offset=offset,
-            include=["embeddings", "documents", "metadatas"],
-        )
-        if not result["ids"]:
-            break
+    # Fetch IDs first (no vectors) to avoid Chroma offset-pagination failures at scale,
+    # then retrieve data by ID in batches.
+    all_ids = _iter_ids(src)
+    total = len(all_ids)
+    copied = 0
+    for i in range(0, total, COPY_BATCH):
+        batch_ids = all_ids[i:i + COPY_BATCH]
+        result = src.get(ids=batch_ids, include=["embeddings", "documents", "metadatas"])
         dst.add(
             ids=result["ids"],
             embeddings=result["embeddings"],
             documents=result["documents"],
             metadatas=result["metadatas"],
         )
-        offset += len(result["ids"])
-        if total and offset < total:
-            print(f"\r  backing up {offset:,} / {total:,}", end="", flush=True)
-    if offset:
+        copied += len(result["ids"])
+        if total and copied < total:
+            print(f"\r  backing up {copied:,} / {total:,}", end="", flush=True)
+    if copied:
         print()
 
 
@@ -97,25 +109,22 @@ def swap_collection(client, build_name: str, final_name: str, total: int) -> Non
     src = client.get_collection(build_name)
     dst = client.get_or_create_collection(final_name, metadata={"hnsw:space": "cosine"})
 
+    # IDs in the build collection are always sequential strings "0".."total-1".
+    # Fetching by explicit ID avoids Chroma's offset-pagination bug at large scales.
     print(f"Promoting temp collection → '{final_name}'...")
-    offset = 0
-    while True:
-        result = src.get(
-            limit=COPY_BATCH,
-            offset=offset,
-            include=["embeddings", "documents", "metadatas"],
-        )
-        if not result["ids"]:
-            break
+    copied = 0
+    for i in range(0, total, COPY_BATCH):
+        batch_ids = [str(j) for j in range(i, min(i + COPY_BATCH, total))]
+        result = src.get(ids=batch_ids, include=["embeddings", "documents", "metadatas"])
         dst.add(
             ids=result["ids"],
             embeddings=result["embeddings"],
             documents=result["documents"],
             metadatas=result["metadatas"],
         )
-        offset += len(result["ids"])
-        if offset < total:
-            print(f"\r  {offset:,} / {total:,} copied", end="", flush=True)
+        copied += len(result["ids"])
+        if copied < total:
+            print(f"\r  {copied:,} / {total:,} copied", end="", flush=True)
 
     final_count = dst.count()
     if final_count != total:
