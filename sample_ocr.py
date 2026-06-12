@@ -79,7 +79,7 @@ def main():
         print(f"  chunks:          {count:,}")
         print(f"  mean length:     {mean_len:.0f} chars")
         print(f"  mean garble:     {mean_garble:.3f}  (>0.05 = suspicious)")
-        print(f"  high-garble:     {high_garble}/{fetch_n} chunks ({100*high_garble/fetch_n:.0f}%)")
+        print(f"  high-garble:     {high_garble}/{fetch_n} chunks ({100*high_garble/(fetch_n or 1):.0f}%)")
 
         if args.show > 0:
             samples = random.sample(docs, min(args.show, len(docs)))
