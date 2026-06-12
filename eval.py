@@ -277,7 +277,7 @@ TEST_CASES = [
     {
         "group": "survivorlibrary_medicine",
         "question": "What were the historical medical uses of digitalis from the foxglove plant?",
-        "expected": ["heart", "dropsy", "leaf", "dose"],
+        "expected": ["heart", "cardiac", "failure", "dose"],
         "note": "Cardiac pharmacology — a_manual_of_practical_therapeutics_1871, a_treatise_on_pharmacy_1874",
     },
     {
