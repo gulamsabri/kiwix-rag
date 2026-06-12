@@ -60,7 +60,7 @@ def process_collection(col, threshold: int, dry_run: bool, show_samples: int) ->
         pct = min(offset + batch_size, total)
         print(f"\r    scanned {pct:,}/{total:,} …", end="", flush=True)
 
-    print(f"\r    scanned {total:,}/{total:,} — {len(to_delete):,} flagged ({100*len(to_delete)/total:.1f}%)")
+    print(f"\r    scanned {total:,}/{total:,} — {len(to_delete):,} flagged ({100*len(to_delete)/(total or 1):.1f}%)")
 
     if samples:
         print(f"\n  --- Sample flagged chunks ---")
