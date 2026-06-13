@@ -1,0 +1,35 @@
+# kiwix-rag configuration
+# Copy this file to config.yaml and edit the values below.
+# All settings can also be overridden with environment variables
+# (prefix: KIWIX_RAG_, e.g. KIWIX_RAG_OLLAMA_URL).
+
+# Path to the ChromaDB vector database directory
+db_path: ./vector_db
+
+# Sentence-transformers embedding model name or local path
+embed_model: all-MiniLM-L6-v2
+
+# Ollama server base URL
+ollama_url: http://localhost:11434
+
+# Ollama model to use for generation
+llm_model: llama3.2:3b
+
+# Number of chunks to retrieve per query
+top_k: 3
+
+# Web server settings
+host: 127.0.0.1
+port: 5000
+
+# Semantic routing settings
+top_groups: 2
+route_threshold: 0.20
+max_per_group: 15
+max_cache_size: 15
+
+# Ollama request timeout in seconds
+timeout: 300
+
+# Optional: base directory for batch_index.sh (overrides KIWIX_DIR env var)
+# kiwix_dir: /path/to/your/kiwix-library

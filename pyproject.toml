@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kiwix-rag"
+version = "0.2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb",
+    "sentence-transformers",
+    "flask",
+    "requests",
+    "numpy",
+    "libzim",
+    "beautifulsoup4",
+    "langchain-text-splitters",
+    "pypdf",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+ocr = [
+    "pymupdf",
+    "opencv-python-headless",
+    "pillow",
+    "pytesseract",
+]
+dev = [
+    "pytest",
+    "pytest-mock",
+]
+
+[project.scripts]
+kiwix-extract = "kiwix_rag.cli:extract_main"
+kiwix-index   = "kiwix_rag.cli:index_main"
+kiwix-query   = "kiwix_rag.cli:query_main"
+kiwix-serve   = "kiwix_rag.cli:serve_main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kiwix_rag*"]
