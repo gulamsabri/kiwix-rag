@@ -70,14 +70,14 @@ def create_app(
     Pass retriever and router for testing (avoids loading real models).
     In production, omit them — create_app will initialize them from config.
     """
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(__file__).parent / "templates"
     app = Flask(__name__, template_folder=str(templates_dir))
 
     if retriever is None:
         retriever = Retriever(config.db_path, config.embed_model)
-        _client = retriever._client
+        _client = retriever.client
     else:
-        _client = getattr(retriever, "_client", None)
+        _client = getattr(retriever, "client", None)
 
     if router is None:
         if _client is None:

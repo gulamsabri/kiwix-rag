@@ -29,6 +29,7 @@ ocr = [
     "opencv-python-headless",
     "pillow",
     "pytesseract",
+    "easyocr",
 ]
 dev = [
     "pytest",
@@ -44,3 +45,6 @@ kiwix-serve   = "kiwix_rag.cli:serve_main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["kiwix_rag*"]
+
+[tool.setuptools.package-data]
+kiwix_rag = ["templates/*.html"]

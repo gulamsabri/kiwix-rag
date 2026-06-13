@@ -202,6 +202,9 @@ def query_main() -> None:
         except requests.exceptions.ConnectionError:
             print("\n[Error] Could not reach Ollama. Start it with: ollama serve")
             return
+        except requests.exceptions.ReadTimeout:
+            print("\n[Error] Ollama request timed out.")
+            return
         print()
         seen, sources = [], []
         for c in chunks:

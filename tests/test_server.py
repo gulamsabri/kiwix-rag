@@ -70,3 +70,27 @@ def test_api_ask_no_chunks_returns_error(client, mock_retriever):
     assert resp.status_code == 200
     data = json.loads(resp.data)
     assert "error" in data
+
+
+def test_ask_sse_streams_tokens(client):
+    def fake_post(*args, **kwargs):
+        class FakeResp:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+            def raise_for_status(self):
+                pass
+            def iter_lines(self):
+                import json
+                yield json.dumps({"response": "Hello", "done": False}).encode()
+                yield json.dumps({"response": " world", "done": True}).encode()
+        return FakeResp()
+
+    with patch("kiwix_rag.server.requests.post", side_effect=fake_post):
+        resp = client.get("/ask?q=test+question")
+
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "Hello" in body
+    assert "world" in body
