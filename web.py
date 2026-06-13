@@ -110,6 +110,7 @@ GROUPS = {
             "wwwnc_cdc_gov",
             "biology_stackexchange",
             "libretexts_org_en_med",
+            "survivorlibrary_medicine",
             # future: merck, who_guidelines, tabers
         ],
     },
@@ -134,7 +135,10 @@ GROUPS = {
             "martialarts_stackexchange",
             "solar_lowtechmagazine",
             "lifehacks_stackexchange",
-            # future: survivorlibrary, army_survival_fm, sere
+            "survivorlibrary_agriculture",
+            "survivorlibrary_homesteading",
+            "s2underground",
+            # future: army_survival_fm, sere
         ],
     },
     "military": {
@@ -349,6 +353,7 @@ GROUPS = {
         "patterns": [
             "gardening",
             "sustainability_stackexchange",
+            "survivorlibrary_agriculture",
             # future: permaculture, square_foot_gardening, rhs
         ],
     },
@@ -368,6 +373,7 @@ GROUPS = {
             "usda_2015",
             "beer_stackexchange",
             "alcohol_stackexchange",
+            "survivorlibrary_homesteading",
             # future: recipe_databases, fdc_usda
         ],
     },
@@ -411,6 +417,7 @@ GROUPS = {
             "diy_stackexchange",
             "crafts_stackexchange",
             "3dprinting_stackexchange",
+            "survivorlibrary_engineering",
             # future: repair_cafe, fixya
         ],
     },
@@ -444,6 +451,7 @@ GROUPS = {
             "ham_stackexchange",
             "robotics_stackexchange",
             "3dprinting_stackexchange",
+            "survivorlibrary_amateur_radio",
             # future: datasheets, component_databases, kicad_docs
         ],
     },
@@ -466,6 +474,7 @@ GROUPS = {
             "literature_stackexchange",
             "philosophy_stackexchange",
             "linguistics_stackexchange",
+            "survivorlibrary_reference",
             "internet_encyclopedia_philosophy",
             "ebooks_stackexchange",
             "parenting_stackexchange",
@@ -822,15 +831,14 @@ def main():
         sys.exit(1)
 
     if _args.max_collection_size is not None:
-        conn = sqlite3.connect(str(db_path / "chroma.sqlite3"))
-        rows = conn.execute(
-            "SELECT c.name, COUNT(e.id) FROM collections c "
-            "JOIN segments s ON s.collection = c.id "
-            "JOIN embeddings e ON e.segment_id = s.id "
-            "GROUP BY c.id"
-        ).fetchall()
-        conn.close()
-        sizes = {name: count for name, count in rows}
+        # Use per-collection count() calls rather than one bulk SQL aggregate.
+        # The aggregate query does a full scan of the entire embeddings table;
+        # individual count() calls hit a per-segment index and are much faster
+        # on large databases served from a USB SSD.
+        print(f"Checking collection sizes (max {_args.max_collection_size:,})...")
+        sizes = {}
+        for n in names:
+            sizes[n] = client.get_collection(n).count()
         skipped = [n for n in names if not (0 < sizes.get(n, 0) <= _args.max_collection_size)]
         names   = [n for n in names if  0 < sizes.get(n, 0) <= _args.max_collection_size]
         if skipped:
