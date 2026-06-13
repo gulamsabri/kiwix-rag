@@ -4,6 +4,7 @@ sentence-transformers
 flask
 requests
 numpy
+pyyaml
 
 # ZIM extraction
 libzim
@@ -11,7 +12,7 @@ beautifulsoup4
 langchain-text-splitters
 pypdf
 
-# OCR (optional — only needed if using --ocr flag with extract_zim.py)
+# OCR (optional — only needed if using --ocr flag with kiwix-extract)
 # Install all three for tesseract engine:
 #   pip install pymupdf opencv-python-headless pillow pytesseract
 #   macOS:  brew install tesseract
