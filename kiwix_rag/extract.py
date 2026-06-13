@@ -71,7 +71,8 @@ class ZimExtractor:
         return self.quality_filter.is_clean(chunk)
 
     def _yield_blocks(
-        self, blocks: list[dict], source: str, title: str
+        self, blocks: list[dict], source: str, title: str,
+        counts: dict | None = None,
     ) -> Iterator[dict]:
         for block in blocks:
             if len(block["text"]) < 150:
@@ -84,6 +85,8 @@ class ZimExtractor:
                         "title": title,
                         "is_accepted": block.get("is_accepted", False),
                     }
+                elif counts is not None:
+                    counts["filtered"] += 1
 
     def iter_chunks(
         self,
@@ -134,7 +137,7 @@ class ZimExtractor:
                     counts["skipped"] += 1
                     continue
                 counts["html"] += 1
-                yield from self._yield_blocks(blocks, entry.path, title)
+                yield from self._yield_blocks(blocks, entry.path, title, counts)
 
             elif ("application/json" in mime
                   and entry.path.startswith("videos/")
@@ -154,6 +157,8 @@ class ZimExtractor:
                 for chunk in self.splitter.split_text(text):
                     if self._should_keep(chunk):
                         yield {"text": chunk, "source": entry.path, "title": vtitle}
+                    else:
+                        counts["filtered"] += 1
 
             elif "application/json" in mime and "page_content_" in entry.path:
                 try:
@@ -169,7 +174,7 @@ class ZimExtractor:
                     counts["skipped"] += 1
                     continue
                 counts["json_html"] = counts.get("json_html", 0) + 1
-                yield from self._yield_blocks(blocks, entry.path, title)
+                yield from self._yield_blocks(blocks, entry.path, title, counts)
 
             elif "application/pdf" in mime:
                 if not _PYPDF_AVAILABLE:
@@ -200,6 +205,8 @@ class ZimExtractor:
                 for chunk in self.splitter.split_text(text):
                     if self._should_keep(chunk):
                         yield {"text": chunk, "source": entry.path, "title": title}
+                    else:
+                        counts["filtered"] += 1
 
             else:
                 counts["skipped"] += 1
