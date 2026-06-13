@@ -128,7 +128,7 @@ def main():
 
     print(f"\n{'='*60}")
     print(f"Total chunks:   {grand_total:,}")
-    print(f"Total flagged:  {grand_flagged:,}  ({100*grand_flagged/grand_total:.1f}%)")
+    print(f"Total flagged:  {grand_flagged:,}  ({100*grand_flagged/(grand_total or 1):.1f}%)")
     if args.dry_run:
         print(f"Remaining:      {grand_total - grand_flagged:,}  (if you run without --dry-run)")
     else:
