@@ -11,7 +11,7 @@
 #
 # Usage:
 #   bash update_pi.sh                 # sync vector DB only
-#   bash update_pi.sh --scripts       # also sync web.py / templates / eval.py
+#   bash update_pi.sh --scripts       # also sync scripts, kiwix_rag/ package, pyproject.toml
 #   bash update_pi.sh --kiwix         # also rebuild kiwix library + restart kiwix-serve
 #   bash update_pi.sh --scripts --kiwix
 #
@@ -63,13 +63,17 @@ echo ""
 
 if $sync_scripts; then
     echo "━━━ Syncing scripts ━━━"
-    for f in rag.py web.py eval.py requirements.txt; do
+    for f in rag.py web.py eval.py requirements.txt pyproject.toml; do
         cp "$SCRIPTS_SRC/$f" "$SCRIPTS_DEST/$f" && echo "  $f"
     done
     rsync -ah --delete \
         "$SCRIPTS_SRC/templates/" \
         "$SCRIPTS_DEST/templates/"
     echo "  templates/"
+    rsync -ah --delete \
+        "$SCRIPTS_SRC/kiwix_rag/" \
+        "$SCRIPTS_DEST/kiwix_rag/"
+    echo "  kiwix_rag/"
     cp "$SCRIPTS_SRC/kiwix-rag.service" "$SCRIPTS_DEST/kiwix-rag.service" && echo "  kiwix-rag.service"
     echo ""
 fi
@@ -88,6 +92,9 @@ if $rebuild_kiwix; then
 else
     echo "  ssh $PI 'sudo systemctl restart kiwix-rag'"
     if $sync_scripts; then
+        echo ""
+        echo "  If kiwix_rag/ changed, reinstall the package first:"
+        echo "  ssh $PI 'source ~/kiwix-rag/bin/activate && pip install /mnt/ssd/kiwix-rag-project/'"
         echo ""
         echo "  If the service file changed, also run:"
         echo "  ssh $PI 'sudo cp /mnt/ssd/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kiwix-rag'"

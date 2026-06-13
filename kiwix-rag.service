@@ -25,8 +25,7 @@ ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --ollama-url http://cori-desktop.local:11434 \
     --model llama3.1:8b-rag \
     --max-cache-size 8 \
-    --max-per-group 5 \
-    --max-collection-size 500000
+    --max-per-group 5
 Restart=on-failure
 RestartSec=15
 StandardOutput=journal
