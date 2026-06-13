@@ -11,6 +11,10 @@ score_chunk(text) -> (int, list[str])   full scoring with reasons
 is_clean(text, threshold)  -> bool      convenience wrapper
 """
 
+# DEPRECATED: Logic has moved to kiwix_rag/filter.py as the ChunkFilter class.
+# This file is kept for backward compatibility with resegment scripts.
+# It will be removed in a future release.
+
 import re
 
 _PRICE_RE = re.compile(r'\$\s*\d')
