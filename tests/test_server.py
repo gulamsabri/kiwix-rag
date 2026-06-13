@@ -1,6 +1,5 @@
 # tests/test_server.py
 import json
-import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 from kiwix_rag.config import Config

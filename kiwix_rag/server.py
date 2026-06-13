@@ -4,7 +4,6 @@ import os
 import time
 import threading
 from pathlib import Path
-from typing import Any
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
@@ -71,22 +70,21 @@ def create_app(
     Pass retriever and router for testing (avoids loading real models).
     In production, omit them — create_app will initialize them from config.
     """
-    import chromadb
-    from sentence_transformers import SentenceTransformer
-
     templates_dir = Path(__file__).parent.parent / "templates"
     app = Flask(__name__, template_folder=str(templates_dir))
 
     if retriever is None:
-        _embedder = SentenceTransformer(config.embed_model)
-        _client = chromadb.PersistentClient(path=str(config.db_path.expanduser()))
         retriever = Retriever(config.db_path, config.embed_model)
-        retriever._embedder = _embedder
-        retriever._client = _client
+        _client = retriever._client
     else:
         _client = getattr(retriever, "_client", None)
 
     if router is None:
+        if _client is None:
+            raise ValueError(
+                "Cannot auto-build router: retriever._client is None. "
+                "Inject a router or pass a full Retriever."
+            )
         router = GroupRouter(
             GROUPS,
             top_groups=config.top_groups,
@@ -100,7 +98,6 @@ def create_app(
     threading.Thread(target=_eviction_daemon, args=(col_cache,), daemon=True).start()
 
     def _retrieve_for_query(question: str) -> list[dict]:
-        import numpy as np
         q_norm = retriever.embedder.encode([question], normalize_embeddings=True)
         groups = router.route(q_norm[0])
         seen: set[str] = set()
@@ -166,10 +163,16 @@ def create_app(
                             break
             except requests.exceptions.ConnectionError:
                 yield _sse({"token": "\n[Error: could not reach Ollama — is it running?]"})
+                yield "data: [DONE]\n\n"
+                return
             except requests.exceptions.ReadTimeout:
                 yield _sse({"token": "\n[Error: Ollama timed out]"})
+                yield "data: [DONE]\n\n"
+                return
             except Exception as e:
                 yield _sse({"token": f"\n[Error: {e}]"})
+                yield "data: [DONE]\n\n"
+                return
 
             seen_sources, sources = [], []
             for c in chunks:
