@@ -380,8 +380,23 @@ GROUPS = {
             "diy_stackexchange",
             "crafts_stackexchange",
             "3dprinting_stackexchange",
-            "survivorlibrary_engineering",
             # future: repair_cafe, fixya
+        ],
+    },
+    "engineering": {
+        "description": (
+            "How does a steam engine work? How do I build a bridge or a dam? "
+            "How are machines designed and operated? How is coal or ore mined? "
+            "How do I generate electricity with a dynamo? How does a boiler work? "
+            "How do I transmit electric power over long distances? How is steel "
+            "or iron manufactured? How do I operate or repair industrial machinery? "
+            "How are roads, railways, or canals constructed? What are the principles "
+            "of mechanical or civil engineering? How does a turbine or water wheel work? "
+            "How is paper, glass, or textile made in a mill? How do I set up a factory?"
+        ),
+        "patterns": [
+            "survivorlibrary_engineering",
+            # future: engineering_manuals, industrial_arts
         ],
     },
     "security": {
