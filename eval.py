@@ -316,6 +316,73 @@ TEST_CASES = [
         "expected": ["carbon", "iron", "wrought", "cast"],
         "note": "Foundry metallurgy — canadian_foundryman vol 9–12 1918–1921",
     },
+
+    # ── survivorlibrary_law (e00003000) ───────────────────────────────────────
+    # Cyclopedia of Law and Procedure (many vols, 1905–1911);
+    # Current Law – A Complete Encyclopedia of New Law (vols 2–13, 1904).
+    {
+        "group": "survivorlibrary_law",
+        "question": "What elements are required to form a legally binding contract?",
+        "expected": ["offer", "acceptance", "consideration", "agreement"],
+        "note": "Contract formation — cyclopedia_of_law_and_procedure vols 17–38; current_law vols 2–13",
+    },
+    {
+        "group": "survivorlibrary_law",
+        "question": "What is the difference between a felony and a misdemeanor?",
+        "expected": ["felony", "misdemeanor", "crime", "punishment"],
+        "note": "Criminal law classification — cyclopedia_of_law_and_procedure",
+    },
+
+    # ── survivorlibrary_mining (e00003000) ────────────────────────────────────
+    # Coal Age journals vols 17–21 (1920–1922); Coal Mining Catalogs (1922).
+    {
+        "group": "survivorlibrary_mining",
+        "question": "What ventilation methods were used in coal mines to prevent dangerous gas accumulation?",
+        "expected": ["ventilation", "gas", "air", "mine"],
+        "note": "Mine safety — coal_age vol 17–21 (1920–1922)",
+    },
+
+    # ── survivorlibrary_anatomy (e00003500) ───────────────────────────────────
+    # Demonstrations of Anatomy (Ellis 1840/1882, Addison 1906);
+    # Diseases of the Chest and Physical Diagnosis (1917, 1920);
+    # Differential Diagnosis vols 1–2 (1911–1920); Emergency Surgery (1915);
+    # Diagnosis and Treatment of Brain Injuries (1920);
+    # Diseases of the Ear (1874, 1880, 1904); Diseases of the Stomach (1908).
+    {
+        "group": "survivorlibrary_anatomy",
+        "question": "How do you use percussion and auscultation to diagnose diseases of the chest?",
+        "expected": ["percussion", "auscultation", "lung", "breath"],
+        "note": "Physical diagnosis — diseases_of_the_chest_and_physical_diagnosis 1917/1920",
+    },
+    {
+        "group": "survivorlibrary_anatomy",
+        "question": "What are the symptoms and signs of a brain injury and how was it treated before modern neurosurgery?",
+        "expected": ["skull", "fracture", "pressure", "brain"],
+        "note": "Neurotrauma — diagnosis_and_treatment_of_brain_injuries_with_and_without_skull_fracture_1920",
+    },
+    {
+        "group": "survivorlibrary_anatomy",
+        "question": "How was emergency surgery for hemorrhage or abdominal wounds performed in the field in 1915?",
+        "expected": ["wound", "hemorrhage", "antiseptic", "operation"],
+        "note": "Field surgery — emergency_surgery_1915",
+    },
+
+    # ── survivorlibrary_electrical (e00003500) ────────────────────────────────
+    # Electricity in the Service of Man (1886);
+    # Dynamo Electric Machinery – A Manual for Students (1905);
+    # Electric Power Transmission (1907).
+    {
+        "group": "survivorlibrary_electrical",
+        "question": "How does a dynamo generate electricity and what is the role of the armature?",
+        "expected": ["armature", "coil", "magnet", "current"],
+        "note": "Electrical generation — dynamo_electric_machinery_a_manual_for_students_1905",
+    },
+    {
+        "group": "survivorlibrary_electrical",
+        "question": "How was high-voltage electric power transmitted over long distances in the early 20th century?",
+        "expected": ["voltage", "transformer", "transmission", "line"],
+        "note": "Power transmission — electric_power_transmission_a_treatise_for_practical_men_1907",
+    },
 ]
 
 
