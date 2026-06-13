@@ -6,6 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "kiwix-rag"
 version = "0.2.0"
 requires-python = ">=3.11"
+description = "Offline RAG over Kiwix ZIM libraries — semantic search + local LLM, no internet required"
+readme = "README.md"
+authors = [{name = "Gulam Sabri"}]
+keywords = ["kiwix", "rag", "offline", "llm", "raspberry-pi"]
 dependencies = [
     "chromadb",
     "sentence-transformers",
