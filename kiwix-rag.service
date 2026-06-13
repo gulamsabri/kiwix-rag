@@ -18,14 +18,15 @@ Type=simple
 User=pi
 Group=pi
 Environment="HF_HUB_OFFLINE=1"
-WorkingDirectory=/mnt/ssd/kiwix-rag-project
 ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --host 0.0.0.0 \
     --db /mnt/ssd/vector_db \
-    --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
-    --max-collection-size 500000 \
-    --model llama3.2:3b \
-    --top-k 3
+    --embed-model /mnt/nvme/all-MiniLM-L6-v2 \
+    --ollama-url http://cori-desktop.local:11434 \
+    --model llama3.1:8b-rag \
+    --max-cache-size 8 \
+    --max-per-group 5 \
+    --max-collection-size 500000
 Restart=on-failure
 RestartSec=15
 StandardOutput=journal

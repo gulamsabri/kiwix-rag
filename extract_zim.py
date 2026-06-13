@@ -89,13 +89,20 @@ def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, bool]:
 
 
 def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitter,
-                ocr_engine=None):
+                ocr_engine=None, entry_offset: int = 0, entry_limit: int = 0,
+                quality_filter: bool = False):
     total = archive.all_entry_count
-    counts = {"skipped": 0, "html": 0, "pdf": 0, "pdf_scanned": 0, "pdf_error": 0}
+    start = entry_offset
+    end = min(entry_offset + entry_limit, total) if entry_limit > 0 else total
+    counts = {"skipped": 0, "html": 0, "pdf": 0, "pdf_scanned": 0, "pdf_error": 0,
+              "filtered": 0}
 
-    for i in range(total):
-        if i % 500 == 0:
-            print(f"\r  {i:,} / {total:,} entries scanned ...", end="", flush=True)
+    if quality_filter:
+        from chunk_filter import is_clean
+
+    for i in range(start, end):
+        if (i - start) % 500 == 0:
+            print(f"\r  {i - start:,} / {end - start:,} entries scanned ...", end="", flush=True)
 
         try:
             entry = archive._get_entry_by_id(i)  # private API; no public equivalent exists
@@ -128,6 +135,9 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
                 if len(block["text"]) < 150:
                     continue
                 for chunk in splitter.split_text(block["text"]):
+                    if quality_filter and not is_clean(chunk):
+                        counts["filtered"] += 1
+                        continue
                     yield {
                         "text": chunk,
                         "source": entry.path,
@@ -135,6 +145,32 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
                         "is_accepted": block["is_accepted"],
                     }
             continue  # chunks already yielded above
+
+        elif "application/json" in mime and entry.path.startswith("videos/") and entry.path.endswith(".json"):
+            # Video channel ZIM format (e.g. s2underground): videos/<slug>.json
+            # Contains title + description; no transcripts in this format.
+            try:
+                data = json.loads(content)
+            except Exception:
+                counts["skipped"] += 1
+                continue
+            desc = data.get("description", "").strip()
+            vtitle = data.get("title", title).strip()
+            text = f"{vtitle}\n\n{desc}" if desc else vtitle
+            if len(text) < 150:
+                counts["skipped"] += 1
+                continue
+            counts["video_desc"] = counts.get("video_desc", 0) + 1
+            for chunk in splitter.split_text(text):
+                if quality_filter and not is_clean(chunk):
+                    counts["filtered"] += 1
+                    continue
+                yield {
+                    "text": chunk,
+                    "source": entry.path,
+                    "title": vtitle,
+                }
+            continue
 
         elif "application/json" in mime and "page_content_" in entry.path:
             # LibreTexts ZIM format: content lives in page_content_*.json { htmlBody: "..." }
@@ -156,6 +192,9 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
                 if len(block["text"]) < 150:
                     continue
                 for chunk in splitter.split_text(block["text"]):
+                    if quality_filter and not is_clean(chunk):
+                        counts["filtered"] += 1
+                        continue
                     yield {
                         "text": chunk,
                         "source": entry.path,
@@ -196,6 +235,9 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
             continue
 
         for chunk in splitter.split_text(text):
+            if quality_filter and not is_clean(chunk):
+                counts["filtered"] += 1
+                continue
             yield {
                 "text": chunk,
                 "source": entry.path,
@@ -204,6 +246,8 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
 
     print()  # end the progress line
     print(f"  HTML pages:        {counts['html']:,}")
+    if counts.get("video_desc"):
+        print(f"  Video desc (JSON): {counts['video_desc']:,}")
     if counts.get("json_html"):
         print(f"  JSON pages:        {counts['json_html']:,}")
     print(f"  PDFs (text):       {counts['pdf']:,}")
@@ -214,6 +258,8 @@ def iter_chunks(archive: libzim.Archive, splitter: RecursiveCharacterTextSplitte
     if counts["pdf_error"]:
         print(f"  PDFs (error, skipped):         {counts['pdf_error']:,}")
     print(f"  Other/redirects:   {counts['skipped']:,}")
+    if counts["filtered"]:
+        print(f"  Quality-filtered:  {counts['filtered']:,}")
 
 
 def main():
@@ -241,6 +287,18 @@ def main():
         "--ocr-engine", default="tesseract", choices=["tesseract", "easyocr"],
         help="OCR engine to use (default: tesseract)",
     )
+    parser.add_argument(
+        "--entry-offset", type=int, default=0,
+        help="First ZIM entry index to process (default: 0)",
+    )
+    parser.add_argument(
+        "--entry-limit", type=int, default=0,
+        help="Max number of entries to process (default: 0 = all remaining)",
+    )
+    parser.add_argument(
+        "--filter", action="store_true",
+        help="Drop chunks that score as ads or conspiracy content (uses chunk_filter.py)",
+    )
     args = parser.parse_args()
 
     zim_path = Path(args.zim_file).expanduser().resolve()
@@ -248,11 +306,12 @@ def main():
         print(f"Error: file not found: {zim_path}", file=sys.stderr)
         sys.exit(1)
 
-    output_path = (
-        Path(args.output).expanduser().resolve()
-        if args.output
-        else zim_path.parent / f"{zim_path.stem}_chunks.jsonl"
-    )
+    if args.output:
+        output_path = Path(args.output).expanduser().resolve()
+    elif args.entry_offset > 0 or args.entry_limit > 0:
+        output_path = zim_path.parent / f"{zim_path.stem}_e{args.entry_offset:08d}_chunks.jsonl"
+    else:
+        output_path = zim_path.parent / f"{zim_path.stem}_chunks.jsonl"
 
     print(f"Input:        {zim_path}")
     print(f"Output:       {output_path}")
@@ -260,10 +319,16 @@ def main():
     print(f"PDF support:  {'yes (pypdf)' if _PYPDF_AVAILABLE else 'no — install pypdf'}")
     ocr_label = f"yes ({args.ocr_engine})" if args.ocr else "no (pass --ocr to enable)"
     print(f"OCR support:  {ocr_label}")
+    print(f"Filter:       {'yes (chunk_filter.py)' if args.filter else 'no (pass --filter to enable)'}")
     print()
 
     archive = libzim.Archive(zim_path)
-    print(f"Entries in archive: {archive.all_entry_count:,}")
+    total_entries = archive.all_entry_count
+    entry_end = min(args.entry_offset + args.entry_limit, total_entries) if args.entry_limit > 0 else total_entries
+    if args.entry_offset > 0 or args.entry_limit > 0:
+        print(f"Entries in archive: {total_entries:,}  (processing {args.entry_offset:,} – {entry_end:,})")
+    else:
+        print(f"Entries in archive: {total_entries:,}")
     print()
 
     ocr_engine = None
@@ -282,7 +347,9 @@ def main():
 
     count = 0
     with open(output_path, "w", encoding="utf-8") as out:
-        for chunk in iter_chunks(archive, splitter, ocr_engine=ocr_engine):
+        for chunk in iter_chunks(archive, splitter, ocr_engine=ocr_engine,
+                                 entry_offset=args.entry_offset, entry_limit=args.entry_limit,
+                                 quality_filter=args.filter):
             out.write(json.dumps(chunk, ensure_ascii=False) + "\n")
             count += 1
 
