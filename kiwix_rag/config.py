@@ -41,7 +41,10 @@ class Config:
         yaml_path = path if path is not None else Path("config.yaml")
         if yaml_path.exists():
             with open(yaml_path, encoding="utf-8") as f:
-                loaded = yaml.safe_load(f) or {}
+                try:
+                    loaded = yaml.safe_load(f) or {}
+                except yaml.YAMLError as e:
+                    raise ValueError(f"Invalid YAML in {yaml_path}: {e}") from e
             values.update(loaded)
 
         # Env var layer — KIWIX_RAG_<FIELD_NAME_UPPER>
@@ -65,9 +68,19 @@ class Config:
             if fname in _PATH_FIELDS and raw is not None:
                 typed[fname] = Path(raw)
             elif fld.type in (int, "int"):
-                typed[fname] = int(raw)
+                try:
+                    typed[fname] = int(raw)
+                except (ValueError, TypeError):
+                    raise ValueError(
+                        f"Config field '{fname}' must be an integer, got {raw!r}"
+                    ) from None
             elif fld.type in (float, "float"):
-                typed[fname] = float(raw)
+                try:
+                    typed[fname] = float(raw)
+                except (ValueError, TypeError):
+                    raise ValueError(
+                        f"Config field '{fname}' must be a float, got {raw!r}"
+                    ) from None
             else:
                 typed[fname] = raw
 
