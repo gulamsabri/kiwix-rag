@@ -43,3 +43,25 @@ def test_resident_never_exceeds_budget_for_multi_query():
     cache.get(["b"])
     cache.get(["c"])
     assert cache._resident_bytes() <= 8
+
+
+def test_cache_hit_refreshes_last_used():
+    import time
+    cache = make_cache({"a": 5, "b": 5}, max_bytes=8)
+    cache.get(["a"])
+    old_ts = cache._cache["a"]["last_used"]
+    time.sleep(0.01)
+    cache.get(["a"])   # cache hit must refresh the timestamp
+    assert cache._cache["a"]["last_used"] > old_ts
+
+
+def test_eviction_order_prefers_oldest():
+    import time
+    cache = make_cache({"a": 6, "b": 6, "c": 6}, max_bytes=12)
+    cache.get(["a"])
+    time.sleep(0.01)
+    cache.get(["b"])         # b newer than a
+    got = cache.get(["c"])   # needs room; should evict the older (a), keep b
+    assert got == {"c": "COL:c"}
+    assert "a" not in cache._cache
+    assert "b" in cache._cache

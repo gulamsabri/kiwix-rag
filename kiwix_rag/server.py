@@ -55,6 +55,12 @@ class CollectionCache:
                     del self._cache[lru]
                 fits = self._resident_bytes() + need <= self._max_bytes
                 if fits or not self._cache:
+                    if not fits:
+                        print(
+                            f"  [cache] best-effort load {n} ({need / 1e9:.1f} GB) "
+                            f"— exceeds budget alone",
+                            flush=True,
+                        )
                     self._cache[n] = {
                         "col": self._client.get_collection(n),
                         "bytes": need,
