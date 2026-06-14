@@ -26,6 +26,14 @@ class CollectionSizer:
         self._db_path = Path(db_path)
         self._seg_map = self._load_segment_map()
         self._cache: dict[str, int] = {}
+        if (self._db_path / "chroma.sqlite3").exists() and not self._seg_map:
+            print(
+                f"  [sizer] WARNING: loaded no collection sizes from "
+                f"{self._db_path / 'chroma.sqlite3'} — the cache byte budget will be "
+                f"ineffective (all collections size as 0); relying on the service "
+                f"MemoryMax backstop.",
+                flush=True,
+            )
 
     def _load_segment_map(self) -> dict[str, list[str]]:
         sqlite_path = self._db_path / "chroma.sqlite3"

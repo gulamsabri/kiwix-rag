@@ -51,3 +51,14 @@ def test_sizer_missing_db_is_zero(tmp_path):
 def test_sizer_corrupt_db_is_zero(tmp_path):
     (tmp_path / "chroma.sqlite3").write_bytes(b"not a database")
     assert CollectionSizer(tmp_path).size("anything") == 0
+
+
+def test_sizer_warns_when_db_present_but_unreadable(tmp_path, capsys):
+    (tmp_path / "chroma.sqlite3").write_bytes(b"not a database")
+    CollectionSizer(tmp_path)
+    assert "WARNING" in capsys.readouterr().out
+
+
+def test_sizer_no_warning_when_db_absent(tmp_path, capsys):
+    CollectionSizer(tmp_path)  # no chroma.sqlite3 at all
+    assert "WARNING" not in capsys.readouterr().out
