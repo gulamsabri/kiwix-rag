@@ -252,7 +252,8 @@ def serve_main() -> None:
     parser.add_argument("--route-threshold", type=float, default=None)
     parser.add_argument("--timeout", type=int, default=None)
     parser.add_argument("--max-per-group", type=int, default=None)
-    parser.add_argument("--max-cache-size", type=int, default=None)
+    parser.add_argument("--max-cache-bytes", type=int, default=None,
+                        help="Max resident collection-index bytes (default ~11 GB)")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--config", default=None, metavar="FILE")
@@ -266,7 +267,7 @@ def serve_main() -> None:
         ("embed_model", args.embed_model), ("ollama_url", args.ollama_url),
         ("top_k", args.top_k), ("top_groups", args.top_groups),
         ("route_threshold", args.route_threshold), ("timeout", args.timeout),
-        ("max_per_group", args.max_per_group), ("max_cache_size", args.max_cache_size),
+        ("max_per_group", args.max_per_group), ("max_cache_bytes", args.max_cache_bytes),
         ("host", args.host), ("port", args.port),
     ] if v is not None}
     cfg = Config.load(Path(args.config) if args.config else None, **cfg_overrides)
