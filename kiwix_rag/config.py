@@ -23,6 +23,7 @@ class Config:
     top_groups: int = 2
     route_threshold: float = 0.20
     max_cache_size: int = 15
+    max_cache_bytes: int = 11_000_000_000
     max_per_group: int = 15
     host: str = "127.0.0.1"
     port: int = 5000

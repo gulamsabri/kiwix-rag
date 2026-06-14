@@ -92,3 +92,14 @@ def test_invalid_yaml_raises_valueerror(tmp_path):
     yaml_file.write_text("db_path: [\nbad yaml\n")
     with pytest.raises(ValueError, match="Invalid YAML"):
         Config.load(yaml_file)
+
+
+def test_max_cache_bytes_default():
+    from kiwix_rag.config import Config
+    assert Config().max_cache_bytes == 11_000_000_000
+
+
+def test_max_cache_bytes_override_coerces_int():
+    from kiwix_rag.config import Config
+    cfg = Config.load(max_cache_bytes="5000000000")
+    assert cfg.max_cache_bytes == 5_000_000_000
