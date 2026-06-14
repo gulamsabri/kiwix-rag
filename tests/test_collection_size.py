@@ -46,3 +46,8 @@ def test_sizer_unknown_collection_is_zero(tmp_path):
 def test_sizer_missing_db_is_zero(tmp_path):
     # No chroma.sqlite3 at all (e.g. test/dev environment)
     assert CollectionSizer(tmp_path).size("anything") == 0
+
+
+def test_sizer_corrupt_db_is_zero(tmp_path):
+    (tmp_path / "chroma.sqlite3").write_bytes(b"not a database")
+    assert CollectionSizer(tmp_path).size("anything") == 0

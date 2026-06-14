@@ -33,11 +33,13 @@ class CollectionSizer:
             return {}
         try:
             con = sqlite3.connect(str(sqlite_path))
-            rows = con.execute(
-                "SELECT c.name, s.id FROM segments s "
-                "JOIN collections c ON s.collection = c.id"
-            ).fetchall()
-            con.close()
+            try:
+                rows = con.execute(
+                    "SELECT c.name, s.id FROM segments s "
+                    "JOIN collections c ON s.collection = c.id"
+                ).fetchall()
+            finally:
+                con.close()
         except sqlite3.Error:
             return {}
         mapping: dict[str, list[str]] = {}
