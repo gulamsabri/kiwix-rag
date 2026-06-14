@@ -89,7 +89,7 @@ python web.py [options]
   --top-k N              Chunks retrieved per query (default: 3)
   --top-groups N         Max collection groups searched per query (default: 2)
   --max-per-group N      Max collections selected per group (default: 10)
-  --max-cache-size N     Max collections held in memory at once (default: 15)
+  --max-cache-bytes N    Resident byte budget for collection indexes (default: 11000000000 ≈ 11 GB)
   --max-collection-size N  Skip collections larger than this many vectors (default: unlimited)
 ```
 
@@ -103,11 +103,11 @@ python web.py \
   --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
   --model llama3.2:3b \
   --max-collection-size 500000 \
-  --max-cache-size 15 \
-  --max-per-group 10
+  --max-cache-bytes 11000000000 \
+  --max-per-group 5
 ```
 
-`--max-cache-size 15` caps collections in memory at ~6GB. With Ollama at ~2.5GB and OS at ~1GB, total is ~9.5GB — safe for 15GB Pi 5.
+`--max-cache-bytes 11000000000` caps the resident collection-index byte budget at ~11 GB. With Ollama at ~2.5 GB and OS at ~1 GB, total is ~14.5 GB — safe for a 16 GB Pi 5.
 
 ## Semantic group routing
 

@@ -24,14 +24,14 @@ ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --embed-model /mnt/nvme/all-MiniLM-L6-v2 \
     --ollama-url http://cori-desktop.local:11434 \
     --model llama3.1:8b-rag \
-    --max-cache-size 2 \
-    --max-per-group 3
+    --max-cache-bytes 11000000000 \
+    --max-per-group 5
 Restart=on-failure
 RestartSec=15
-# Collection HNSW indexes are 2-7 GB each; cache is count-bounded, so a
-# multi-group run can accumulate past RAM. On a 16 GB Pi, cap resident memory
+# Collection HNSW indexes are 2-7 GB each; cache is byte-bounded so total
+# resident index memory stays within budget. On a 16 GB Pi, cap resident memory
 # so an overflow kills only this service (clean restart) instead of triggering
-# a global OOM that takes down networking. Pair with --max-cache-size above.
+# a global OOM that takes down networking. Pair with --max-cache-bytes above.
 MemoryMax=13G
 StandardOutput=journal
 StandardError=journal

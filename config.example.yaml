@@ -27,6 +27,7 @@ top_groups: 2
 route_threshold: 0.20
 max_per_group: 15
 max_cache_size: 15
+max_cache_bytes: 11000000000   # ~11 GB resident collection-index budget
 
 # Ollama request timeout in seconds
 timeout: 300
