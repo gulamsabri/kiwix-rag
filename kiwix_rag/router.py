@@ -66,10 +66,10 @@ class GroupRouter:
                 fallback.append("_other")
             return fallback
 
-        selected = [g for g, s in ranked[: self.top_groups] if s >= best - 0.1]
-        if "_other" in self.group_cols:
-            selected.append("_other")
-        return selected
+        # Confident match: search only the top groups. _other (unassigned
+        # collections) is reserved for the below-threshold fallback above, so
+        # it never pollutes correctly-routed queries.
+        return [g for g, s in ranked[: self.top_groups] if s >= best - 0.1]
 
     def select_collections(
         self, names: list[str], query: str, max_n: int | None = None

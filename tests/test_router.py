@@ -70,3 +70,22 @@ def test_select_collections_returns_all_when_under_cap(router, mock_embedder):
     names = ["col_a", "col_b"]
     selected = router.select_collections(names, "any query", max_n=10)
     assert selected == names
+
+
+def test_confident_route_excludes_other():
+    r = GroupRouter(GROUPS, top_groups=2, route_threshold=0.20)
+    r.group_cols = {"web": ["devdocs_en_react_chunks"], "_other": ["scifi_chunks"]}
+    r._group_embs = {"web": np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)}
+    q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)  # dot=1.0 >= threshold
+    result = r.route(q)
+    assert "web" in result
+    assert "_other" not in result
+
+
+def test_below_threshold_route_includes_other():
+    r = GroupRouter(GROUPS, top_groups=2, route_threshold=0.20)
+    r.group_cols = {"web": ["devdocs_en_react_chunks"], "_other": ["scifi_chunks"]}
+    r._group_embs = {"web": np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)}
+    q = np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)  # dot=0.0 < threshold
+    result = r.route(q)
+    assert "_other" in result
