@@ -13,6 +13,7 @@ from flask import Flask, Response, render_template, request
 from kiwix_rag.config import Config
 from kiwix_rag.groups import SYSTEM_PROMPT, GROUPS
 from kiwix_rag.router import GroupRouter
+from kiwix_rag.collection_size import CollectionSizer
 from kiwix_rag.retrieval import Retriever, build_prompt
 
 _GROUP_TTL = 600  # seconds before idle collection evicted from cache
@@ -124,7 +125,10 @@ def create_app(
         available = [c.name for c in _client.list_collections()]
         router.build(available, retriever.embedder)
 
-    col_cache = CollectionCache(_client, max_size=config.max_cache_size)
+    sizer = CollectionSizer(config.db_path)
+    col_cache = CollectionCache(
+        _client, max_bytes=config.max_cache_bytes, size_fn=sizer.size
+    )
     threading.Thread(target=_eviction_daemon, args=(col_cache,), daemon=True).start()
 
     def _retrieve_for_query(question: str) -> list[dict]:
