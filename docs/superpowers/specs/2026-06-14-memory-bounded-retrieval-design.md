@@ -128,6 +128,16 @@ are cheap and this avoids a 297 GB re-sync.
   healthy to re-run the eval, but it is a separate infra fix, not retrieval.
 - Re-embedding / splitting the large collections.
 
+### Future work (not this effort)
+
+- **Audit `_other` and fan its content into groups/routes.** After the 7
+  leftovers are dropped, `_other` holds legit-but-unassigned collections
+  (`scifi_stackexchange`, `openstreetmap_wiki`, …) reachable only via the
+  below-threshold fallback. Adding new groups (e.g. an entertainment/sci-fi
+  group, a geography/maps group) or extending existing group patterns would
+  give them a *confident-route* path to the surface, so good answers aren't
+  gated behind fallback. Periodic `_other` audits as the corpus grows.
+
 ## Success Criteria
 
 - React → React/devdocs; devops → serverfault/devdocs; no survivorlibrary on
