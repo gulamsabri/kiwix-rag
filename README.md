@@ -88,14 +88,14 @@ python web.py [options]
   --ollama-url URL       Ollama base URL (default: http://localhost:11434)
   --top-k N              Chunks retrieved per query (default: 3)
   --top-groups N         Max collection groups searched per query (default: 2)
-  --max-per-group N      Max collections selected per group (default: 10)
+  --max-per-group N      Max collections selected per group (default: 15)
   --max-cache-bytes N    Resident byte budget for collection indexes (default: 11000000000 ≈ 11 GB)
   --max-collection-size N  Skip collections larger than this many vectors (default: unlimited)
 ```
 
 ### Memory scaling (Pi 5)
 
-Each ChromaDB collection uses ~400MB RAM when loaded. With 123 collections:
+Collection HNSW indexes vary widely in size — from a few MB for small ZIMs up to 6–7 GB for the largest. Rather than capping a fixed collection count, the server bounds total resident index bytes via `--max-cache-bytes` (default ~11 GB); `MemoryMax=13G` in the systemd service is the hard backstop. Example for a 16 GB Pi 5:
 
 ```bash
 python web.py \
