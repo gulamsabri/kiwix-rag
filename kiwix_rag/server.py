@@ -19,28 +19,52 @@ _GROUP_TTL = 600  # seconds before idle collection evicted from cache
 
 
 class CollectionCache:
-    """Thread-safe LRU cache for ChromaDB collection handles."""
+    """Byte-budgeted cache for ChromaDB collection handles.
 
-    def __init__(self, client, max_size: int) -> None:
+    Resident memory is bounded by total on-disk index bytes (a proxy for RAM),
+    not by count. The current request's working set (the names passed to one
+    get() call) is never evicted; only collections from previous queries are.
+    A collection that cannot fit is skipped and logged, except a single
+    collection larger than the whole budget, which is loaded alone (best effort).
+    """
+
+    def __init__(self, client, max_bytes: int, size_fn) -> None:
         self._client = client
-        self._max = max_size
+        self._max_bytes = max_bytes
+        self._size_fn = size_fn
         self._cache: dict[str, dict] = {}
         self._lock = threading.Lock()
 
+    def _resident_bytes(self) -> int:
+        return sum(e["bytes"] for e in self._cache.values())
+
     def get(self, names: list[str]) -> dict:
         now = time.time()
+        working = set(names)
         with self._lock:
             for n in names:
-                if n not in self._cache:
-                    if self._max and len(self._cache) >= self._max:
-                        lru = min(self._cache, key=lambda k: self._cache[k]["last_used"])
-                        del self._cache[lru]
+                if n in self._cache:
+                    self._cache[n]["last_used"] = now
+                    continue
+                need = self._size_fn(n)
+                while self._resident_bytes() + need > self._max_bytes:
+                    evictable = [k for k in self._cache if k not in working]
+                    if not evictable:
+                        break
+                    lru = min(evictable, key=lambda k: self._cache[k]["last_used"])
+                    del self._cache[lru]
+                fits = self._resident_bytes() + need <= self._max_bytes
+                if fits or not self._cache:
                     self._cache[n] = {
                         "col": self._client.get_collection(n),
+                        "bytes": need,
                         "last_used": now,
                     }
                 else:
-                    self._cache[n]["last_used"] = now
+                    print(
+                        f"  [cache] skipped {n} ({need / 1e9:.1f} GB) — over budget",
+                        flush=True,
+                    )
             return {n: self._cache[n]["col"] for n in names if n in self._cache}
 
     def evict_stale(self, ttl: float = _GROUP_TTL) -> None:
