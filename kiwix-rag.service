@@ -23,7 +23,7 @@ ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --db /mnt/ssd/vector_db \
     --embed-model /mnt/nvme/all-MiniLM-L6-v2 \
     --ollama-url http://cori-desktop.local:11434 \
-    --model llama3.1:8b-rag \
+    --model qwen2.5:3b-rag \
     --max-cache-bytes 6500000000 \
     --max-per-group 5
 Restart=on-failure
