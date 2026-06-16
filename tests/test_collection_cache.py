@@ -55,6 +55,22 @@ def test_cache_hit_refreshes_last_used():
     assert cache._cache["a"]["last_used"] > old_ts
 
 
+def test_drop_all_then_adopt_clears_handles_and_swaps_client():
+    cache = make_cache({"a": 5}, max_bytes=10)
+    cache.get(["a"])
+    assert "a" in cache._cache
+
+    cache.drop_all()                   # must clear handles AND old client ref
+    assert cache._cache == {}
+    assert cache._client is None
+
+    new_client = MagicMock()
+    new_client.get_collection.side_effect = lambda n: f"NEW:{n}"
+    cache.adopt(new_client)
+    got = cache.get(["a"])             # reloads from the new client
+    assert got == {"a": "NEW:a"}
+
+
 def test_eviction_order_prefers_oldest():
     import time
     cache = make_cache({"a": 6, "b": 6, "c": 6}, max_bytes=12)

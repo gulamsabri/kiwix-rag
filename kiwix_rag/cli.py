@@ -254,6 +254,9 @@ def serve_main() -> None:
     parser.add_argument("--max-per-group", type=int, default=None)
     parser.add_argument("--max-cache-bytes", type=int, default=None,
                         help="Max resident collection-index bytes (default ~11 GB)")
+    parser.add_argument("--memory-high-water-bytes", type=int, default=None,
+                        help="Reset ChromaDB client when RSS exceeds this (frees "
+                             "accumulated segments). 0 disables. Default ~6 GB.")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--config", default=None, metavar="FILE")
@@ -268,6 +271,7 @@ def serve_main() -> None:
         ("top_k", args.top_k), ("top_groups", args.top_groups),
         ("route_threshold", args.route_threshold), ("timeout", args.timeout),
         ("max_per_group", args.max_per_group), ("max_cache_bytes", args.max_cache_bytes),
+        ("memory_high_water_bytes", args.memory_high_water_bytes),
         ("host", args.host), ("port", args.port),
     ] if v is not None}
     cfg = Config.load(Path(args.config) if args.config else None, **cfg_overrides)

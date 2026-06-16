@@ -14,7 +14,7 @@ from kiwix_rag.config import Config
 from kiwix_rag.groups import SYSTEM_PROMPT, GROUPS
 from kiwix_rag.router import GroupRouter
 from kiwix_rag.collection_size import CollectionSizer
-from kiwix_rag.retrieval import Retriever, build_prompt
+from kiwix_rag.retrieval import Retriever, build_prompt, process_rss_bytes
 
 _GROUP_TTL = 600  # seconds before idle collection evicted from cache
 
@@ -38,6 +38,22 @@ class CollectionCache:
 
     def _resident_bytes(self) -> int:
         return sum(e["bytes"] for e in self._cache.values())
+
+    def drop_all(self) -> None:
+        """Release every cached handle and the old client reference.
+
+        Must run BEFORE Retriever.reset_client() so that no reference to the old
+        ChromaDB system survives clear_system_cache() — otherwise the segments
+        are not freed (the bug that made the reset a no-op).
+        """
+        with self._lock:
+            self._cache.clear()
+            self._client = None
+
+    def adopt(self, new_client) -> None:
+        """Point the cache at the freshly-rebuilt client (after reset_client)."""
+        with self._lock:
+            self._client = new_client
 
     def get(self, names: list[str]) -> dict:
         now = time.time()
@@ -132,6 +148,25 @@ def create_app(
     threading.Thread(target=_eviction_daemon, args=(col_cache,), daemon=True).start()
 
     def _retrieve_for_query(question: str) -> list[dict]:
+        # ChromaDB never frees loaded HNSW segments, so resident memory grows with
+        # every distinct collection queried. Before serving a query, if RSS has
+        # crossed the high-water mark, reset the client (frees all segments back to
+        # baseline) so peak stays ~= high_water + one query's working set, under
+        # MemoryMax. See Retriever.reset_client / CollectionCache.reset.
+        hw = config.memory_high_water_bytes
+        rss = process_rss_bytes()
+        if hw and rss > hw:
+            print(f"  [mem] RSS {rss/1e9:.1f}GB > {hw/1e9:.1f}GB — resetting ChromaDB client",
+                  flush=True)
+            # Order matters: drop ALL handles + the old client ref FIRST, then
+            # reset_client() runs clear_system_cache()+gc with no surviving refs,
+            # then adopt the fresh client. (Doing reset_client() first leaves the
+            # cache's handles referencing the old system, so nothing frees.)
+            col_cache.drop_all()
+            new_client = retriever.reset_client()
+            col_cache.adopt(new_client)
+            print(f"  [mem] after reset RSS {process_rss_bytes()/1e9:.1f}GB", flush=True)
+
         q_norm = retriever.embedder.encode([question], normalize_embeddings=True)
         groups = router.route(q_norm[0])
         seen: set[str] = set()

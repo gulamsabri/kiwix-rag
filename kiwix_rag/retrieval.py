@@ -1,11 +1,30 @@
 from __future__ import annotations
+import gc
 import os
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 import chromadb
+from chromadb.api.shared_system_client import SharedSystemClient
 from sentence_transformers import SentenceTransformer
+
+
+def process_rss_bytes() -> int:
+    """Resident set size of this process in bytes (Linux), else 0.
+
+    Used to trigger a ChromaDB client reset before RSS approaches the cgroup
+    cap. Returns 0 on platforms without /proc (e.g. macOS dev) so the reset
+    logic is simply disabled there.
+    """
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) * 1024  # kB -> bytes
+    except OSError:
+        pass
+    return 0
 
 
 def build_prompt(question: str, chunks: list[dict]) -> str:
@@ -33,6 +52,26 @@ class Retriever:
 
     @property
     def client(self) -> chromadb.PersistentClient:
+        return self._client
+
+    def reset_client(self) -> chromadb.PersistentClient:
+        """Free ChromaDB's loaded HNSW segments and return a fresh client.
+
+        ChromaDB holds loaded segments on the cached System for the client's
+        lifetime; there is no working per-segment eviction in 1.5.x, so a
+        long-lived client accumulates every queried collection until OOM.
+
+        Freeing requires that NO references to the old System remain when
+        clear_system_cache() runs: the caller MUST drop every cached collection
+        handle and any other client reference (e.g. CollectionCache.drop_all())
+        BEFORE calling this. We then drop our own reference, clear ChromaDB's
+        internal system cache, gc to break reference cycles (verified to return
+        RSS to baseline), and rebuild a clean client.
+        """
+        self._client = None
+        SharedSystemClient.clear_system_cache()
+        gc.collect()
+        self._client = chromadb.PersistentClient(path=str(self.db_path))
         return self._client
 
     def retrieve(self, query: str, collections: list, k: int = 5) -> list[dict]:

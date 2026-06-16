@@ -92,3 +92,31 @@ def test_retrieve_boosts_accepted_answers():
     # After 0.85x boost: accepted effective dist = 0.5 * 0.85 = 0.425 < 0.5
     # So accepted chunk should rank first despite higher raw distance
     assert chunks[0]["is_accepted"] is True
+
+
+# ── ChromaDB client reset (the real memory bound) ───────────────────────────────
+
+def test_reset_client_clears_cache_and_rebuilds():
+    """reset_client must clear ChromaDB's system cache (frees loaded segments)
+    and return a fresh client — the only thing that actually bounds memory in
+    chromadb 1.5.x."""
+    mock_embedder = MagicMock()
+    with patch("kiwix_rag.retrieval.chromadb.PersistentClient") as mock_client, \
+         patch("kiwix_rag.retrieval.SharedSystemClient") as mock_shared, \
+         patch("kiwix_rag.retrieval.SentenceTransformer", return_value=mock_embedder):
+        r = Retriever(db_path="/fake/db")
+        first = r.client
+        new = r.reset_client()
+
+    mock_shared.clear_system_cache.assert_called_once()
+    assert new is r.client
+    # a brand new client object was constructed for the rebuild
+    assert mock_client.call_count == 2
+
+
+def test_process_rss_bytes_returns_int():
+    """RSS probe returns a non-negative int (0 where /proc is unavailable)."""
+    from kiwix_rag.retrieval import process_rss_bytes
+    val = process_rss_bytes()
+    assert isinstance(val, int)
+    assert val >= 0

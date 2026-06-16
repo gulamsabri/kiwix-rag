@@ -24,6 +24,10 @@ class Config:
     route_threshold: float = 0.20
     max_cache_size: int = 15
     max_cache_bytes: int = 11_000_000_000
+    # When process RSS exceeds this, the server resets the ChromaDB client to free
+    # accumulated HNSW segments (ChromaDB has no working segment eviction). Keep it
+    # below MemoryMax minus one query's working set. 0 disables the reset.
+    memory_high_water_bytes: int = 6_000_000_000
     max_per_group: int = 15
     host: str = "127.0.0.1"
     port: int = 5000
