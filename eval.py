@@ -388,14 +388,29 @@ TEST_CASES = [
 
 # ── runner ────────────────────────────────────────────────────────────────────
 
-def ask(base_url: str, question: str, timeout: int) -> dict:
-    resp = requests.post(
-        f"{base_url}/api/ask",
-        json={"question": question},
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    return resp.json()
+def ask(base_url: str, question: str, timeout: int,
+        retries: int = 4, backoff: float = 15.0) -> dict:
+    # Retry on connection errors only. If a single query overflows the byte
+    # budget, the service is OOM-killed within its cgroup and systemd restarts
+    # it (~35 s). Without retry, that brief outage fails every remaining
+    # question (RemoteDisconnected, then "No route to host"). Backoff totals
+    # ~60 s, enough to ride out one clean restart. HTTP errors and read
+    # timeouts are NOT retried (the request was accepted; retrying piles on).
+    last_err: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(
+                f"{base_url}/api/ask",
+                json={"question": question},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.ConnectionError as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(backoff)
+    raise last_err
 
 
 def score(answer: str, keywords: list[str]) -> tuple[list, list]:
