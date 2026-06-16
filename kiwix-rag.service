@@ -24,7 +24,7 @@ ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --embed-model /mnt/nvme/all-MiniLM-L6-v2 \
     --ollama-url http://cori-desktop.local:11434 \
     --model llama3.1:8b-rag \
-    --max-cache-bytes 11000000000 \
+    --max-cache-bytes 6500000000 \
     --max-per-group 5
 Restart=on-failure
 RestartSec=15
@@ -32,6 +32,17 @@ RestartSec=15
 # resident index memory stays within budget. On a 16 GB Pi, cap resident memory
 # so an overflow kills only this service (clean restart) instead of triggering
 # a global OOM that takes down networking. Pair with --max-cache-bytes above.
+#
+# REQUIRED for this to work: the kernel memory cgroup controller must be enabled.
+# Raspberry Pi OS DISABLES it by default (cgroup_disable=memory in cmdline.txt),
+# which makes MemoryMax a silent no-op — an overflow then triggers a GLOBAL OOM
+# that freezes the whole Pi (symptom: eval passes early then RemoteDisconnected
+# -> "No route to host"). Enable it once, then reboot:
+#   /boot/firmware/cmdline.txt : replace "cgroup_disable=memory"
+#                                with    "cgroup_enable=memory cgroup_memory=1"
+# Verify after reboot:
+#   grep memory /sys/fs/cgroup/cgroup.controllers      # must list "memory"
+#   cat /sys/fs/cgroup/system.slice/kiwix-rag.service/memory.max   # = 13G in bytes
 MemoryMax=13G
 StandardOutput=journal
 StandardError=journal
