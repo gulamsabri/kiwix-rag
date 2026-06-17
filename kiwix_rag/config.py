@@ -10,6 +10,8 @@ _ENV_PREFIX = "KIWIX_RAG_"
 
 # Fields whose values should be coerced to Path
 _PATH_FIELDS = {"db_path", "kiwix_dir"}
+# Fields typed as list[str]; a string layer (env var, scalar YAML) is split on commas.
+_LIST_FIELDS = {"collections"}
 
 
 @dataclass
@@ -79,6 +81,9 @@ class Config:
             raw = values[fname]
             if fname in _PATH_FIELDS and raw is not None:
                 typed[fname] = Path(raw)
+            elif fname in _LIST_FIELDS and isinstance(raw, str):
+                # env vars / scalar YAML arrive as a comma-separated string
+                typed[fname] = [s.strip() for s in raw.split(",") if s.strip()] or None
             elif fld.type in (int, "int"):
                 try:
                     typed[fname] = int(raw)

@@ -83,6 +83,8 @@ kiwix-query "how do I treat a deep wound?" --db ./vector_db
 kiwix-query --db ./vector_db
 ```
 
+Pin either command to a subset of collections with `--collection/-c NAME` (repeatable), or set `collections:` in `config.yaml` / `KIWIX_RAG_COLLECTIONS` (comma-separated) so `kiwix-query` and `kiwix-serve` search the same corpus. Omit to use all collections.
+
 **Web UI:**
 ```bash
 kiwix-serve --db ./vector_db

@@ -39,21 +39,24 @@ class CollectionCache:
     def _resident_bytes(self) -> int:
         return sum(e["bytes"] for e in self._cache.values())
 
-    def drop_all(self) -> None:
-        """Release every cached handle and the old client reference.
+    def reset(self, rebuild) -> None:
+        """Atomically drop every handle, rebuild the client, and adopt it.
 
-        Must run BEFORE Retriever.reset_client() so that no reference to the old
-        ChromaDB system survives clear_system_cache() — otherwise the segments
-        are not freed (the bug that made the reset a no-op).
+        Holds the cache lock across the whole drop→rebuild→adopt transition.
+        Under the threaded server multiple requests share one cache; a concurrent
+        get() takes the same lock, so it can never observe self._client as None
+        mid-reset (the race that turned the memory-protection path into an
+        intermittent AttributeError/500).
+
+        rebuild() runs AFTER the cache is cleared and our client ref is dropped,
+        so ChromaDB's clear_system_cache() has no surviving references to the old
+        system (the ordering the segment-freeing fix depends on). It must return
+        the freshly-built client.
         """
         with self._lock:
             self._cache.clear()
             self._client = None
-
-    def adopt(self, new_client) -> None:
-        """Point the cache at the freshly-rebuilt client (after reset_client)."""
-        with self._lock:
-            self._client = new_client
+            self._client = rebuild()
 
     def get(self, names: list[str]) -> dict:
         now = time.time()
@@ -188,13 +191,11 @@ def create_app(
         if hw and rss > hw:
             print(f"  [mem] RSS {rss/1e9:.1f}GB > {hw/1e9:.1f}GB — resetting ChromaDB client",
                   flush=True)
-            # Order matters: drop ALL handles + the old client ref FIRST, then
-            # reset_client() runs clear_system_cache()+gc with no surviving refs,
-            # then adopt the fresh client. (Doing reset_client() first leaves the
-            # cache's handles referencing the old system, so nothing frees.)
-            col_cache.drop_all()
-            new_client = retriever.reset_client()
-            col_cache.adopt(new_client)
+            # Atomic under the cache lock: clears ALL handles + the old client ref,
+            # then reset_client() runs clear_system_cache()+gc with no surviving
+            # refs, then adopts the fresh client — all while concurrent get() calls
+            # are blocked, so no request ever sees a half-reset cache.
+            col_cache.reset(retriever.reset_client)
             print(f"  [mem] after reset RSS {process_rss_bytes()/1e9:.1f}GB", flush=True)
 
         q_norm = retriever.embedder.encode([question], normalize_embeddings=True)

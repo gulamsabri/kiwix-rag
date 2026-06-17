@@ -1,3 +1,4 @@
+import threading
 from unittest.mock import MagicMock
 from kiwix_rag.server import CollectionCache
 
@@ -55,20 +56,56 @@ def test_cache_hit_refreshes_last_used():
     assert cache._cache["a"]["last_used"] > old_ts
 
 
-def test_drop_all_then_adopt_clears_handles_and_swaps_client():
+def test_reset_clears_handles_and_swaps_client_atomically():
     cache = make_cache({"a": 5}, max_bytes=10)
     cache.get(["a"])
     assert "a" in cache._cache
 
-    cache.drop_all()                   # must clear handles AND old client ref
-    assert cache._cache == {}
-    assert cache._client is None
-
     new_client = MagicMock()
     new_client.get_collection.side_effect = lambda n: f"NEW:{n}"
-    cache.adopt(new_client)
-    got = cache.get(["a"])             # reloads from the new client
+
+    def rebuild():
+        # rebuild runs only after handles + old client ref are dropped, so
+        # ChromaDB's clear_system_cache() has no surviving references.
+        assert cache._cache == {}
+        assert cache._client is None
+        return new_client
+
+    cache.reset(rebuild)
+    got = cache.get(["a"])             # reloads from the freshly-adopted client
     assert got == {"a": "NEW:a"}
+
+
+def test_concurrent_get_blocks_during_reset_never_sees_none_client():
+    # Under threaded serving, a get() that races a reset must block on the cache
+    # lock and resolve against the new client — never hit self._client is None.
+    cache = make_cache({"a": 5}, max_bytes=10)
+    cache.get(["a"])
+
+    in_rebuild = threading.Event()
+    release_rebuild = threading.Event()
+    new_client = MagicMock()
+    new_client.get_collection.side_effect = lambda n: f"NEW:{n}"
+
+    def rebuild():
+        in_rebuild.set()
+        release_rebuild.wait(2)        # hold the lock while a get() tries to run
+        return new_client
+
+    resetter = threading.Thread(target=lambda: cache.reset(rebuild))
+    resetter.start()
+    assert in_rebuild.wait(2)          # reset now holds the lock, client is None
+
+    result = {}
+    reader = threading.Thread(target=lambda: result.update(cache.get(["a"])))
+    reader.start()
+    reader.join(0.2)
+    assert reader.is_alive()           # get() is blocked, not crashing on None
+
+    release_rebuild.set()
+    resetter.join(2)
+    reader.join(2)
+    assert result == {"a": "NEW:a"}    # reader resumed against the new client
 
 
 def test_eviction_order_prefers_oldest():

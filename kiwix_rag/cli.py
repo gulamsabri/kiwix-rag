@@ -149,7 +149,8 @@ def query_main() -> None:
     from kiwix_rag.groups import SYSTEM_PROMPT
 
     cfg_overrides = {k: v for k, v in [
-        ("db_path", args.db), ("llm_model", args.model),
+        ("db_path", args.db), ("collections", args.collections),
+        ("llm_model", args.model),
         ("ollama_url", args.ollama_url), ("top_k", args.top_k),
     ] if v is not None}
     cfg = Config.load(Path(args.config) if args.config else None, **cfg_overrides)
@@ -163,12 +164,14 @@ def query_main() -> None:
         print("No collections found. Run kiwix-index first.")
         sys.exit(1)
 
-    if args.collections:
-        missing = [n for n in args.collections if n not in available]
+    # Pin to cfg.collections (CLI -c overrides config.yaml / KIWIX_RAG_*; None = all),
+    # so kiwix-query and kiwix-serve agree on the active corpus.
+    if cfg.collections:
+        missing = [n for n in cfg.collections if n not in available]
         if missing:
             print(f"Error: collection(s) not found: {', '.join(missing)}")
             sys.exit(1)
-        names = args.collections
+        names = list(cfg.collections)
     else:
         names = available
 

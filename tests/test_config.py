@@ -57,6 +57,26 @@ def test_cli_override_wins_over_env(monkeypatch, tmp_path):
     assert cfg.top_k == 20  # kwargs win over env
 
 
+def test_collections_from_yaml_list(tmp_path):
+    yaml_file = tmp_path / "config.yaml"
+    yaml_file.write_text("collections:\n  - a_chunks\n  - b_chunks\n")
+    cfg = Config.load(yaml_file)
+    assert cfg.collections == ["a_chunks", "b_chunks"]
+
+
+def test_collections_from_env_splits_on_commas(monkeypatch, tmp_path):
+    yaml_file = tmp_path / "config.yaml"
+    yaml_file.write_text("")
+    monkeypatch.setenv("KIWIX_RAG_COLLECTIONS", "a_chunks, b_chunks")
+    cfg = Config.load(yaml_file)
+    assert cfg.collections == ["a_chunks", "b_chunks"]  # not a bare string
+
+
+def test_collections_default_is_none(tmp_path):
+    cfg = Config.load(tmp_path / "missing.yaml")
+    assert cfg.collections is None
+
+
 def test_db_path_is_pathlib(tmp_path):
     yaml_file = tmp_path / "config.yaml"
     yaml_file.write_text("db_path: /tmp/mydb\n")
