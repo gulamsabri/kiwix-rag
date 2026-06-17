@@ -106,6 +106,36 @@ def _eviction_daemon(cache: CollectionCache) -> None:
         cache.evict_stale()
 
 
+def _serving_collections(client, config: Config) -> list[str]:
+    """Resolve which collections the server should route over.
+
+    Honors config.collections (an explicit pin, validated against the DB) and
+    config.max_collection_size (drop empty or oversized collections). Returns
+    the filtered name list that feeds router.build().
+    """
+    available = [c.name for c in client.list_collections()]
+    names = available
+    if config.collections:
+        missing = [n for n in config.collections if n not in available]
+        if missing:
+            raise ValueError(f"collection(s) not found: {', '.join(missing)}")
+        names = list(config.collections)
+    if config.max_collection_size:
+        limit = config.max_collection_size
+        sizes = {n: client.get_collection(n).count() for n in names}
+        kept = [n for n in names if 0 < sizes[n] <= limit]
+        skipped = [n for n in names if n not in kept]
+        if skipped:
+            print(
+                f"Skipped {len(skipped)} collection(s) (empty or >{limit:,} vectors):",
+                flush=True,
+            )
+            for n in skipped:
+                print(f"  {sizes[n]:>10,}  {n}", flush=True)
+        names = kept
+    return names
+
+
 def create_app(
     config: Config,
     retriever: Retriever | None = None,
@@ -138,7 +168,7 @@ def create_app(
             route_threshold=config.route_threshold,
             max_per_group=config.max_per_group,
         )
-        available = [c.name for c in _client.list_collections()]
+        available = _serving_collections(_client, config)
         router.build(available, retriever.embedder)
 
     sizer = CollectionSizer(config.db_path)

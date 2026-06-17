@@ -3,7 +3,51 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 from kiwix_rag.config import Config
-from kiwix_rag.server import create_app
+from kiwix_rag.server import create_app, _serving_collections
+
+
+def _fake_client(names_to_counts):
+    """A ChromaDB-like client whose collections have the given vector counts."""
+    def _named(n):
+        col = MagicMock()
+        col.name = n
+        return col
+
+    client = MagicMock()
+    client.list_collections.return_value = [_named(n) for n in names_to_counts]
+
+    def get_collection(n):
+        col = MagicMock()
+        col.count.return_value = names_to_counts[n]
+        return col
+
+    client.get_collection.side_effect = get_collection
+    return client
+
+
+def test_serving_collections_defaults_to_all():
+    client = _fake_client({"a_chunks": 10, "b_chunks": 20})
+    cfg = Config()
+    assert set(_serving_collections(client, cfg)) == {"a_chunks", "b_chunks"}
+
+
+def test_serving_collections_pins_to_subset():
+    client = _fake_client({"a_chunks": 10, "b_chunks": 20, "c_chunks": 30})
+    cfg = Config(collections=["b_chunks"])
+    assert _serving_collections(client, cfg) == ["b_chunks"]
+
+
+def test_serving_collections_unknown_pin_raises():
+    client = _fake_client({"a_chunks": 10})
+    cfg = Config(collections=["nope_chunks"])
+    with pytest.raises(ValueError, match="not found"):
+        _serving_collections(client, cfg)
+
+
+def test_serving_collections_drops_oversized_and_empty():
+    client = _fake_client({"small": 5, "big": 999, "empty": 0})
+    cfg = Config(max_collection_size=100)
+    assert _serving_collections(client, cfg) == ["small"]
 
 
 @pytest.fixture

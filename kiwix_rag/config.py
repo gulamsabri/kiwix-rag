@@ -29,6 +29,13 @@ class Config:
     # below MemoryMax minus one query's working set. 0 disables the reset.
     memory_high_water_bytes: int = 6_000_000_000
     max_per_group: int = 15
+    # Pin the server to a subset of collections (None = serve every collection
+    # in the DB). Used for relevance and to avoid loading giant indexes while
+    # testing/debugging.
+    collections: list[str] | None = None
+    # Exclude collections with more than this many vectors from the searchable
+    # set (and empty collections). 0 disables the limit.
+    max_collection_size: int = 0
     host: str = "127.0.0.1"
     port: int = 5000
     kiwix_dir: Path | None = None

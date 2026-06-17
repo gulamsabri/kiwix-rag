@@ -252,6 +252,9 @@ def serve_main() -> None:
     parser.add_argument("--route-threshold", type=float, default=None)
     parser.add_argument("--timeout", type=int, default=None)
     parser.add_argument("--max-per-group", type=int, default=None)
+    parser.add_argument("--max-collection-size", type=int, default=None, metavar="N",
+                        help="Exclude collections with more than N vectors (and empty "
+                             "ones) from search. Omit/0 to serve all.")
     parser.add_argument("--max-cache-bytes", type=int, default=None,
                         help="Max resident collection-index bytes (default ~11 GB)")
     parser.add_argument("--memory-high-water-bytes", type=int, default=None,
@@ -266,11 +269,14 @@ def serve_main() -> None:
     from kiwix_rag.server import create_app
 
     cfg_overrides = {k: v for k, v in [
-        ("db_path", args.db), ("llm_model", args.model),
+        ("db_path", args.db), ("collections", args.collections),
+        ("llm_model", args.model),
         ("embed_model", args.embed_model), ("ollama_url", args.ollama_url),
         ("top_k", args.top_k), ("top_groups", args.top_groups),
         ("route_threshold", args.route_threshold), ("timeout", args.timeout),
-        ("max_per_group", args.max_per_group), ("max_cache_bytes", args.max_cache_bytes),
+        ("max_per_group", args.max_per_group),
+        ("max_collection_size", args.max_collection_size),
+        ("max_cache_bytes", args.max_cache_bytes),
         ("memory_high_water_bytes", args.memory_high_water_bytes),
         ("host", args.host), ("port", args.port),
     ] if v is not None}

@@ -83,6 +83,7 @@ python web.py --db ./vector_db
 python web.py [options]
 
   --db PATH              ChromaDB directory (default: ./vector_db next to the script)
+  --collection/-c NAME   Pin serving to this collection (repeatable; default: all collections)
   --embed-model PATH     Path to embedding model (default: all-MiniLM-L6-v2 from HF cache)
   --model NAME           Ollama model name (default: phi3:mini)
   --ollama-url URL       Ollama base URL (default: http://localhost:11434)
