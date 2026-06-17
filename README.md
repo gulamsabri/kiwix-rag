@@ -7,7 +7,7 @@ Designed for deployment on a Raspberry Pi 5 with an external SSD. Originally bui
 ## Architecture
 
 ```
-ZIM files → extract_zim.py → .jsonl chunks → build_index.py → ChromaDB
+ZIM files → kiwix-extract → .jsonl chunks → kiwix-index → ChromaDB
                                                                     ↓
                                                   query → semantic group routing
                                                                     ↓
@@ -38,7 +38,19 @@ ollama pull llama3.2:3b
 ```bash
 python -m venv ~/kiwix-rag
 source ~/kiwix-rag/bin/activate
-pip install -r requirements.txt
+pip install -e .            # installs the kiwix-* commands below
+# For OCR support (scanned PDFs):
+pip install -e '.[ocr]'
+```
+
+This installs four console commands — `kiwix-extract`, `kiwix-index`, `kiwix-query`, and `kiwix-serve`. Each is also runnable as a script (`python extract_zim.py`, `build_index.py`, `rag.py`, `web.py`) if you prefer not to install the package.
+
+### Configuration
+
+All commands read settings (DB path, models, Ollama URL, routing) from a `config.yaml` in the working directory, overridable by `KIWIX_RAG_*` environment variables and per-command flags. Copy the template to get started:
+
+```bash
+cp config.example.yaml config.yaml
 ```
 
 ## Usage
@@ -46,15 +58,15 @@ pip install -r requirements.txt
 ### 1. Extract a ZIM file
 
 ```bash
-python extract_zim.py path/to/file.zim -o chunks.jsonl
+kiwix-extract path/to/file.zim -o chunks.jsonl
 # With OCR for scanned PDFs:
-python extract_zim.py path/to/file.zim -o chunks.jsonl --ocr
+kiwix-extract path/to/file.zim -o chunks.jsonl --ocr
 ```
 
 ### 2. Build the vector index
 
 ```bash
-python build_index.py chunks.jsonl --db ./vector_db
+kiwix-index chunks.jsonl --db ./vector_db
 ```
 
 Repeat for each ZIM. To replace an existing collection, pass `--replace`.
@@ -63,29 +75,29 @@ Repeat for each ZIM. To replace an existing collection, pass `--replace`.
 
 **CLI (single question):**
 ```bash
-python rag.py "how do I treat a deep wound?" --db ./vector_db
+kiwix-query "how do I treat a deep wound?" --db ./vector_db
 ```
 
 **CLI (interactive):**
 ```bash
-python rag.py --db ./vector_db
+kiwix-query --db ./vector_db
 ```
 
 **Web UI:**
 ```bash
-python web.py --db ./vector_db
+kiwix-serve --db ./vector_db
 # Open http://localhost:5000
 ```
 
 ## Web UI options
 
 ```
-python web.py [options]
+kiwix-serve [options]
 
-  --db PATH              ChromaDB directory (default: ./vector_db next to the script)
+  --db PATH              ChromaDB directory (default: ./vector_db or config.yaml)
   --collection/-c NAME   Pin serving to this collection (repeatable; default: all collections)
   --embed-model PATH     Path to embedding model (default: all-MiniLM-L6-v2 from HF cache)
-  --model NAME           Ollama model name (default: phi3:mini)
+  --model NAME           Ollama model name (default: llama3.2:3b)
   --ollama-url URL       Ollama base URL (default: http://localhost:11434)
   --top-k N              Chunks retrieved per query (default: 3)
   --top-groups N         Max collection groups searched per query (default: 2)
@@ -99,7 +111,7 @@ python web.py [options]
 Collection HNSW indexes vary widely in size — from a few MB for small ZIMs up to 6–7 GB for the largest. Rather than capping a fixed collection count, the server bounds total resident index bytes via `--max-cache-bytes` (default ~11 GB); `MemoryMax=13G` in the systemd service is the hard backstop. Example for a 16 GB Pi 5:
 
 ```bash
-python web.py \
+kiwix-serve \
   --db /mnt/ssd/vector_db \
   --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
   --model llama3.2:3b \
@@ -112,9 +124,9 @@ python web.py \
 
 ## Semantic group routing
 
-`web.py` routes each query to the most relevant collection groups based on cosine similarity of the query against group descriptions. This dramatically reduces search time and improves answer quality by avoiding irrelevant collections.
+`kiwix-serve` routes each query to the most relevant collection groups based on cosine similarity of the query against group descriptions. This dramatically reduces search time and improves answer quality by avoiding irrelevant collections.
 
-Groups are defined in `web.py` at the `GROUPS` dict. Add new patterns there when you index new ZIM libraries.
+Groups are defined in `kiwix_rag/groups.py` at the `GROUPS` dict. Add new patterns there when you index new ZIM libraries.
 
 ## Pi deployment
 
@@ -138,7 +150,7 @@ The workflow uses a shared external SSD rather than SSH rsync (faster for large 
 ```bash
 # Stop Pi services, eject SSD from Pi, connect to Mac, then:
 bash update_pi.sh            # sync vector DB only
-bash update_pi.sh --scripts  # also sync web.py, templates, eval.py
+bash update_pi.sh --scripts  # also sync the kiwix_rag/ package, wrappers, templates, eval.py
 bash update_pi.sh --kiwix    # also print the kiwix library rebuild command to run on the Pi
 ```
 
@@ -146,10 +158,10 @@ bash update_pi.sh --kiwix    # also print the kiwix library rebuild command to r
 
 ```bash
 # 1. Extract and index on Mac
-python extract_zim.py new.zim -o new_chunks.jsonl
-python build_index.py new_chunks.jsonl --db ./vector_db
+kiwix-extract new.zim -o new_chunks.jsonl
+kiwix-index new_chunks.jsonl --db ./vector_db
 
-# 2. Add the collection name pattern to the right GROUPS entry in web.py
+# 2. Add the collection name pattern to the right GROUPS entry in kiwix_rag/groups.py
 
 # 3. Sync to Pi
 bash update_pi.sh --scripts
@@ -183,15 +195,13 @@ KIWIX_DIR=/path/to/zims VENV=/path/to/venv/bin/activate bash batch_index.sh batc
 
 ## OCR support
 
-For ZIM files containing scanned PDFs:
+For ZIM files containing scanned PDFs, install the OCR extra (`pip install -e '.[ocr]'`), then:
 
 ```bash
-# easyocr (pure Python, no binary needed):
-pip install easyocr
-python extract_zim.py file.zim -o chunks.jsonl --ocr --ocr-engine easyocr
+# easyocr (pure Python, no system binary needed):
+kiwix-extract file.zim -o chunks.jsonl --ocr --ocr-engine easyocr
 
-# tesseract (faster):
+# tesseract (faster, needs the system binary):
 brew install tesseract   # macOS
-pip install pytesseract
-python extract_zim.py file.zim -o chunks.jsonl --ocr
+kiwix-extract file.zim -o chunks.jsonl --ocr
 ```
