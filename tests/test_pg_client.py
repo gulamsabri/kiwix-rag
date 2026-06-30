@@ -1,4 +1,5 @@
 import numpy as np
+import psycopg
 import pytest
 from pg_client import PgClient
 
@@ -63,3 +64,22 @@ def test_query_returns_expected_fields(client: PgClient):
     assert r["is_accepted"] is True
     # Distance to self (normalized vectors, cosine) should be ~0
     assert r["dist"] < 0.01
+
+
+def test_dimension_mismatch_raises(client: PgClient):
+    client.create_collection("dim")
+    h = client.get_collection("dim")
+    bad_vec = [0.1] * 128  # 128-dim, not 384
+    with pytest.raises(psycopg.errors.DataError):
+        h.upsert(["1"], [bad_vec], ["doc"], [{"source": "s", "title": "t"}])
+
+
+def test_delete_collection_drops_partition(client: PgClient):
+    client.create_collection("goner")
+    h = client.get_collection("goner")
+    h.upsert(["1"], [_vec(9.0)], ["x"], [{"source": "s", "title": "t"}])
+    assert h.count() == 1
+    client.delete_collection("goner")
+    # Re-creating must succeed (partition was dropped cleanly)
+    client.create_collection("goner")
+    assert client.get_collection("goner").count() == 0
