@@ -13,6 +13,7 @@ import re
 from typing import Any, Iterable
 
 import psycopg
+import numpy as np
 from psycopg import sql
 from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
@@ -167,3 +168,69 @@ class CollectionHandle:
                 "SELECT COUNT(*) FROM chunks WHERE collection = %s", (self.name,)
             ).fetchone()
         return int(row[0])
+
+    def upsert(self, ids: list[str], embeddings: list[list[float]],
+               documents: list[str], metadatas: list[dict]) -> None:
+        if not (len(ids) == len(embeddings) == len(documents) == len(metadatas)):
+            raise ValueError("ids, embeddings, documents, metadatas must be equal length")
+        if not ids:
+            return
+        rows = [
+            (
+                str(ids[i]),
+                self.name,
+                np.asarray(embeddings[i], dtype=np.float32),
+                str(documents[i]),
+                str(metadatas[i].get("source", "")),
+                str(metadatas[i].get("title", "")),
+                bool(metadatas[i].get("is_accepted", False)),
+            )
+            for i in range(len(ids))
+        ]
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO chunks (id, collection, embedding, document, source, title, is_accepted)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (collection, id) DO UPDATE SET
+                        embedding   = EXCLUDED.embedding,
+                        document    = EXCLUDED.document,
+                        source      = EXCLUDED.source,
+                        title       = EXCLUDED.title,
+                        is_accepted = EXCLUDED.is_accepted
+                    """,
+                    rows,
+                )
+            conn.execute(
+                "UPDATE collections_registry SET vector_count = "
+                "(SELECT COUNT(*) FROM chunks WHERE collection = %s) "
+                "WHERE collection = %s",
+                (self.name, self.name),
+            )
+
+    def query(self, embedding: list[float], k: int = 3) -> list[dict]:
+        vec = np.asarray(embedding, dtype=np.float32)
+        with self._pool.connection() as conn:
+            register_vector(conn)
+            rows = conn.execute(
+                """
+                SELECT document, source, title, is_accepted,
+                       embedding <=> %s AS dist
+                FROM chunks
+                WHERE collection = %s
+                ORDER BY embedding <=> %s
+                LIMIT %s
+                """,
+                (vec, self.name, vec, k),
+            ).fetchall()
+        return [
+            {
+                "document": r[0],
+                "source": r[1],
+                "title": r[2],
+                "is_accepted": r[3],
+                "dist": float(r[4]),
+            }
+            for r in rows
+        ]
