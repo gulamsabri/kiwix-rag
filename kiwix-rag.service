@@ -4,12 +4,18 @@
 # --db:         ChromaDB directory
 # --embed-model: directory containing the all-MiniLM-L6-v2 snapshot
 # --model:      Ollama model name (run `ollama list` to see installed models)
+# --api-key:    (optional) API key for /api/ask authentication.
+#               If omitted, a key is auto-generated and written to
+#               /home/pi/.config/kiwix-rag-api-key.  To view it:
+#                 cat /home/pi/.config/kiwix-rag-api-key
+# --bind-to-tailscale: (new) Bind Flask to the Pi's Tailscale IP instead
+#               of 0.0.0.0.  Requires Tailscale to be running.
 # RequiresMountsFor: your SSD mount point (or remove if running from SD card)
 # ─────────────────────────────────────────────────────────────────────────────
 
 [Unit]
 Description=Kiwix RAG Web Interface
-After=network.target ollama.service
+After=network.target tailscaled.service ollama.service
 Requires=ollama.service
 RequiresMountsFor=/mnt/ssd
 
@@ -21,12 +27,12 @@ Environment="HF_HUB_OFFLINE=1"
 ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --host 0.0.0.0 \
     --db /mnt/ssd/vector_db \
-    --embed-model /mnt/nvme/all-MiniLM-L6-v2 \
-    --ollama-url http://cori-desktop.local:11434 \
-    --model llama3.1:8b-rag \
-    --max-cache-size 8 \
-    --max-per-group 5 \
-    --max-collection-size 500000
+    --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
+    --max-collection-size 500000 \
+    --model llama3.2:3b \
+    --top-k 3 \
+    --max-cache-bytes 6500000000 \
+    --bind-to-tailscale
 Restart=on-failure
 RestartSec=15
 StandardOutput=journal

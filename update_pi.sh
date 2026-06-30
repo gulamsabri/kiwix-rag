@@ -14,6 +14,7 @@
 #   bash update_pi.sh --scripts       # also sync web.py / templates / eval.py
 #   bash update_pi.sh --kiwix         # also rebuild kiwix library + restart kiwix-serve
 #   bash update_pi.sh --scripts --kiwix
+#   bash update_pi.sh --services      # also deploy systemd service files
 #
 # Typical workflow for adding a new ZIM:
 #   1. scp pi@meshpi.local:/mnt/ssd/kiwix-library/new.zim ~/Downloads/
@@ -32,11 +33,13 @@ SCRIPTS_DEST="$SSD/kiwix-rag-project"
 
 sync_scripts=false
 rebuild_kiwix=false
+sync_services=false
 
 for arg in "$@"; do
     case "$arg" in
-        --scripts) sync_scripts=true ;;
-        --kiwix)   rebuild_kiwix=true ;;
+        --scripts)    sync_scripts=true ;;
+        --kiwix)      rebuild_kiwix=true ;;
+        --services)   sync_services=true ;;
     esac
 done
 
@@ -71,6 +74,24 @@ if $sync_scripts; then
         "$SCRIPTS_DEST/templates/"
     echo "  templates/"
     cp "$SCRIPTS_SRC/kiwix-rag.service" "$SCRIPTS_DEST/kiwix-rag.service" && echo "  kiwix-rag.service"
+    echo ""
+fi
+
+# ── sync systemd services ─────────────────────────────────────────────────────
+
+if $sync_services; then
+    echo "━━━ Syncing systemd services ━━━"
+    for f in kiwix-rag.service kiwix-serve.service caddy-kiwix.service; do
+        if [ -f "$SCRIPTS_SRC/$f" ]; then
+            cp "$SCRIPTS_SRC/$f" "/etc/systemd/system/$f" && echo "  $f → /etc/systemd/system/"
+        fi
+    done
+    # Also deploy Caddy config if present
+    if [ -f "$SCRIPTS_SRC/Caddyfile" ]; then
+        sudo cp "$SCRIPTS_SRC/Caddyfile" /etc/caddy/Caddyfile && echo "  Caddyfile → /etc/caddy/"
+    fi
+    echo "  Reloaded systemd daemons."
+    sudo systemctl daemon-reload
     echo ""
 fi
 
