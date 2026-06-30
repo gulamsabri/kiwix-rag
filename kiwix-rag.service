@@ -1,7 +1,7 @@
 # ── Edit these to match your setup ──────────────────────────────────────────
 # User/Group:   your Pi username
 # ExecStart:    path to your venv Python and the script on your SSD
-# --db:         ChromaDB directory
+# --dsn:        Postgres DSN (e.g. postgresql://kiwix@/kiwix_rag)
 # --embed-model: directory containing the all-MiniLM-L6-v2 snapshot
 # --model:      Ollama model name (run `ollama list` to see installed models)
 # --api-key:    (optional) API key for /api/ask authentication.
@@ -10,14 +10,14 @@
 #                 cat /home/pi/.config/kiwix-rag-api-key
 # --bind-to-tailscale: (new) Bind Flask to the Pi's Tailscale IP instead
 #               of 0.0.0.0.  Requires Tailscale to be running.
-# RequiresMountsFor: your SSD mount point (or remove if running from SD card)
+# RequiresMountsFor: your NVMe mount point (Postgres data lives here)
 # ─────────────────────────────────────────────────────────────────────────────
 
 [Unit]
 Description=Kiwix RAG Web Interface
-After=network.target tailscaled.service ollama.service
-Requires=ollama.service
-RequiresMountsFor=/mnt/ssd
+After=network.target tailscaled.service postgresql.service ollama.service
+Requires=ollama.service postgresql.service
+RequiresMountsFor=/mnt/nvme
 
 [Service]
 Type=simple
@@ -25,8 +25,7 @@ User=pi
 Group=pi
 Environment="HF_HUB_OFFLINE=1"
 ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
-    --host 0.0.0.0 \
-    --db /mnt/ssd/vector_db \
+    --dsn postgresql://kiwix@/kiwix_rag \
     --embed-model /mnt/ssd/all-MiniLM-L6-v2 \
     --max-collection-size 500000 \
     --model llama3.2:3b \

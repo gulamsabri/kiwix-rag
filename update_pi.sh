@@ -10,7 +10,7 @@
 #      updated vector_db to its live location and restart services
 #
 # Usage:
-#   bash update_pi.sh                 # sync vector DB only
+#   bash update_pi.sh                 # (no-op without flags; Postgres data lives on the Pi)
 #   bash update_pi.sh --scripts       # also sync web.py / templates / eval.py
 #   bash update_pi.sh --kiwix         # also rebuild kiwix library + restart kiwix-serve
 #   bash update_pi.sh --scripts --kiwix
@@ -54,19 +54,11 @@ fi
 echo "Target SSD: $SSD"
 echo ""
 
-# ── sync vector DB ────────────────────────────────────────────────────────────
-
-echo "━━━ Syncing vector DB ━━━"
-rsync -ah --progress \
-    "$SCRIPTS_SRC/vector_db/" \
-    "$SSD/vector_db/"
-echo ""
-
 # ── sync scripts ──────────────────────────────────────────────────────────────
 
 if $sync_scripts; then
     echo "━━━ Syncing scripts ━━━"
-    for f in rag.py web.py eval.py requirements.txt; do
+    for f in rag.py web.py eval.py pg_client.py migrate_chroma_to_pg.py verify_migration.py; do
         cp "$SCRIPTS_SRC/$f" "$SCRIPTS_DEST/$f" && echo "  $f"
     done
     rsync -ah --delete \
