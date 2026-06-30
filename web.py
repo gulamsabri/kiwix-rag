@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import random
-import sqlite3
 import subprocess
 import sys
 import time
@@ -25,14 +24,13 @@ from pathlib import Path
 os.environ["HF_HUB_OFFLINE"] = "1"
 
 import numpy as np
-import chromadb
+import pg_client
 import requests
 from flask import Flask, Response, render_template, request
 from sentence_transformers import SentenceTransformer
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
-DB_PATH        = Path(__file__).parent / "vector_db"
 EMBED_MODEL    = "all-MiniLM-L6-v2"
 OLLAMA_URL     = "http://localhost:11434"
 LLM_MODEL      = "phi3:mini"
@@ -572,7 +570,7 @@ def _cors_headers():
 
 app = Flask(__name__)
 _embedder        = None
-_client          = None         # shared chromadb.PersistentClient
+_client          = None         # shared pg_client.PgClient
 _all_names       = []           # all permitted collection names
 _col_cache       = {}           # name → {"col": Collection, "last_used": float}
 _col_lock        = threading.Lock()
@@ -652,30 +650,17 @@ def _ensure_loaded(names: list[str]) -> dict:
     with _col_lock:
         for n in names:
             if n not in _col_cache:
-                # Evict LRU entry when cache is at capacity
+                cap = _args.max_cache_size
                 if _args.max_cache_bytes is not None:
-                    # Byte-based eviction: sum up collection index sizes
-                    while _col_cache:
-                        lru = min(_col_cache, key=lambda k: _col_cache[k]["last_used"])
-                        lru_size = _col_cache[lru].get("size", 0)
-                        current = sum(c.get("size", 0) for c in _col_cache.values())
-                        if current + lru_size <= _args.max_cache_bytes:
-                            break
-                        del _col_cache[lru]
-                        print(f"  [cache] evicted (bytes): {lru}", flush=True)
-                else:
-                    cap = _args.max_cache_size
-                    if cap and len(_col_cache) >= cap:
-                        lru = min(_col_cache, key=lambda k: _col_cache[k]["last_used"])
-                        del _col_cache[lru]
-                # Store collection size for byte-based eviction
-                db_path = Path(_args.db).expanduser()
-                col_db = db_path / (n.replace(" ", "_") + ".db")
-                col_size = 0
-                if col_db.exists():
-                    col_size = sum(f.st_size for f in col_db.rglob("*") if f.is_file())
-                _col_cache[n] = {"col": _client.get_collection(n), "last_used": now, "size": col_size}
-                print(f"  [cache] loaded: {n} ({col_size / 1e9:.1f} GB)", flush=True)
+                    # --max-cache-bytes now behaves as a connection-count cap
+                    # (Postgres' buffer manager handles actual page eviction).
+                    cap = _args.max_cache_bytes
+                if cap and len(_col_cache) >= cap:
+                    lru = min(_col_cache, key=lambda k: _col_cache[k]["last_used"])
+                    del _col_cache[lru]
+                    print(f"  [cache] evicted: {lru}", flush=True)
+                _col_cache[n] = {"col": _client.get_collection(n), "last_used": now, "size": 0}
+                print(f"  [cache] loaded: {n}", flush=True)
             else:
                 _col_cache[n]["last_used"] = now
         return {n: _col_cache[n]["col"] for n in names if n in _col_cache}
@@ -698,7 +683,7 @@ def _eviction_loop() -> None:
 
 def retrieve(query: str, k: int) -> list[dict]:
     q_norm = _embedder.encode([query], normalize_embeddings=True)
-    q_vec  = q_norm.tolist()
+    q_vec  = q_norm[0].tolist()
 
     groups        = _route_query(q_norm[0])
     seen_names: set[str] = set()
@@ -721,19 +706,16 @@ def retrieve(query: str, k: int) -> list[dict]:
     for col in cols_to_search:
         try:
             results = col.query(
-                query_embeddings=q_vec, n_results=k,
-                include=["documents", "metadatas", "distances"],
+                embedding=q_vec, k=k,
             )
         except Exception as e:
             print(f"  skipping '{col.name}': {e}", flush=True)
             continue
-        for doc, meta, dist in zip(
-            results["documents"][0], results["metadatas"][0], results["distances"][0]
-        ):
+        for r in results:
             candidates.append({
-                "text": doc, "source": meta["source"],
-                "title": meta["title"], "dist": dist,
-                "is_accepted": meta.get("is_accepted", False),
+                "text": r["document"], "source": r["source"],
+                "title": r["title"], "dist": r["dist"],
+                "is_accepted": r.get("is_accepted", False),
                 "zim": col.name.removesuffix("_chunks"),
             })
 
@@ -909,7 +891,8 @@ def main():
     global _embedder, _client, _all_names, _args
 
     parser = argparse.ArgumentParser(description="Kiwix RAG web interface.")
-    parser.add_argument("--db", default=str(DB_PATH), help=f"ChromaDB path (default: {DB_PATH})")
+    parser.add_argument("--dsn", default="postgresql:///kiwix_rag",
+                        help="Postgres DSN (default: postgresql:///kiwix_rag)")
     parser.add_argument("--collection", "-c", action="append", dest="collections",
                         metavar="NAME", help="Collection(s) to search (default: all)")
     parser.add_argument("--model", "-m", default=LLM_MODEL, help=f"Ollama model (default: {LLM_MODEL})")
@@ -961,9 +944,8 @@ def main():
     _embedder = SentenceTransformer(_args.embed_model)
     print("ready")
 
-    db_path = Path(_args.db).expanduser()
-    client  = chromadb.PersistentClient(path=str(db_path))
-    available = [c.name for c in client.list_collections()]
+    client = pg_client.PgClient(_args.dsn)
+    available = client.list_collections()
     if not available:
         print("No collections found. Run build_index.py first.")
         sys.exit(1)
@@ -975,14 +957,7 @@ def main():
         sys.exit(1)
 
     if _args.max_collection_size is not None:
-        # Use per-collection count() calls rather than one bulk SQL aggregate.
-        # The aggregate query does a full scan of the entire embeddings table;
-        # individual count() calls hit a per-segment index and are much faster
-        # on large databases served from a USB SSD.
-        print(f"Checking collection sizes (max {_args.max_collection_size:,})...")
-        sizes = {}
-        for n in names:
-            sizes[n] = client.get_collection(n).count()
+        sizes = {n: client.count(n) for n in names}
         skipped = [n for n in names if not (0 < sizes.get(n, 0) <= _args.max_collection_size)]
         names   = [n for n in names if  0 < sizes.get(n, 0) <= _args.max_collection_size]
         if skipped:
