@@ -13,6 +13,7 @@ import re
 from typing import Any, Iterable
 
 import psycopg
+from psycopg import sql
 from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
 
@@ -88,3 +89,81 @@ class PgClient:
                     PRIMARY KEY (collection, chunk_id)
                 )
             """)
+
+    def list_collections(self) -> list[str]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT collection FROM collections_registry ORDER BY collection"
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def count(self, name: str) -> int:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT vector_count FROM collections_registry WHERE collection = %s", (name,)
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def create_collection(self, name: str) -> "CollectionHandle":
+        pname = _partition_name(name)
+        with self._pool.connection() as conn:
+            conn.execute("BEGIN")
+            exists = conn.execute(
+                "SELECT 1 FROM collections_registry WHERE collection = %s", (name,)
+            ).fetchone()
+            if exists:
+                conn.execute("ROLLBACK")
+                return self.get_collection(name)
+            conn.execute(
+                sql.SQL("CREATE TABLE {} PARTITION OF chunks FOR VALUES IN ({})").format(
+                    sql.Identifier(pname), sql.Literal(name)
+                )
+            )
+            conn.execute(
+                sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} USING hnsw (embedding vector_cosine_ops)").format(
+                    sql.Identifier(f"idx_{pname}_hnsw"), sql.Identifier(pname)
+                )
+            )
+            conn.execute(
+                "INSERT INTO collections_registry (collection, vector_count, imported_at, hnsw_built) "
+                "VALUES (%s, 0, NULL, false)", (name,)
+            )
+            conn.execute("COMMIT")
+        return self.get_collection(name)
+
+    def delete_collection(self, name: str) -> None:
+        pname = _partition_name(name)
+        with self._pool.connection() as conn:
+            conn.execute("BEGIN")
+            conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(sql.Identifier(pname)))
+            conn.execute("DELETE FROM collections_registry WHERE collection = %s", (name,))
+            conn.execute("DELETE FROM migration_errors WHERE collection = %s", (name,))
+            conn.execute("COMMIT")
+
+    def get_collection(self, name: str) -> "CollectionHandle":
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM collections_registry WHERE collection = %s", (name,)
+            ).fetchone()
+        if not row:
+            raise KeyError(f"collection not found: {name!r}")
+        return CollectionHandle(self._pool, name)
+
+
+class CollectionHandle:
+    """Wraps a collection name + pooled psycopg connection.
+
+    Exposes .name, .count(), .query(), .upsert() — matching the shape of the
+    ChromaDB collection objects web.py:retrieve() calls.
+    """
+
+    def __init__(self, pool: ConnectionPool, name: str):
+        self._pool = pool
+        self.name = name
+
+    def count(self) -> int:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM chunks WHERE collection = %s", (self.name,)
+            ).fetchone()
+        return int(row[0])
