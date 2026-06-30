@@ -11,16 +11,14 @@ import argparse
 import json
 import os
 import sys
-from pathlib import Path
 
 os.environ["HF_HUB_OFFLINE"] = "1"  # use cached model, no network check on startup
 
-import chromadb
+import pg_client
 import requests
 from sentence_transformers import SentenceTransformer
 
 # ── defaults (override with CLI flags) ────────────────────────────────────────
-DB_PATH = Path(__file__).parent / "vector_db"
 EMBED_MODEL = "all-MiniLM-L6-v2"
 OLLAMA_URL = "http://localhost:11434"
 LLM_MODEL = "phi3:mini"
@@ -34,12 +32,13 @@ SYSTEM_PROMPT = (
 
 
 def retrieve(query: str, collections: list, embedder, k: int) -> list[dict]:
-    vec = embedder.encode([query]).tolist()
+    vec = embedder.encode(query).tolist()
     candidates = []
     for collection in collections:
-        results = collection.query(query_embeddings=vec, n_results=k, include=["documents", "metadatas", "distances"])
-        for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0]):
-            candidates.append({"text": doc, "source": meta["source"], "title": meta["title"], "dist": dist})
+        results = collection.query(embedding=vec, k=k)
+        for r in results:
+            candidates.append({"text": r["document"], "source": r["source"],
+                               "title": r["title"], "dist": r["dist"]})
 
     # sort by distance (lower = more similar), deduplicate, take top-k
     candidates.sort(key=lambda c: c["dist"])
@@ -119,7 +118,8 @@ def ask(question: str, collections: list, embedder, args) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Ask questions answered from your Kiwix index.")
     parser.add_argument("question", nargs="?", help="Question to answer (omit for interactive mode)")
-    parser.add_argument("--db", default=str(DB_PATH), help=f"ChromaDB path (default: {DB_PATH})")
+    parser.add_argument("--dsn", default="postgresql:///kiwix_rag",
+                        help="Postgres DSN (default: postgresql:///kiwix_rag)")
     parser.add_argument("--collection", "-c", action="append", dest="collections",
                         metavar="NAME", help="Collection(s) to search (default: all). Repeat to search multiple.")
     parser.add_argument("--model", "-m", default=LLM_MODEL, help=f"Ollama model (default: {LLM_MODEL})")
@@ -131,8 +131,8 @@ def main():
     embedder = SentenceTransformer(EMBED_MODEL)
     print("ready")
 
-    client = chromadb.PersistentClient(path=str(Path(args.db).expanduser()))
-    available = [c.name for c in client.list_collections()]
+    client = pg_client.PgClient(args.dsn)
+    available = client.list_collections()
     if not available:
         print("No collections found. Run build_index.py first.")
         sys.exit(1)
