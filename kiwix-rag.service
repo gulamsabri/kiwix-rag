@@ -30,7 +30,6 @@ ExecStart=/home/pi/kiwix-rag/bin/python /mnt/ssd/kiwix-rag-project/web.py \
     --max-collection-size 500000 \
     --model llama3.2:3b \
     --top-k 3 \
-    --max-cache-bytes 6500000000 \
     --bind-to-tailscale
 Restart=on-failure
 RestartSec=15

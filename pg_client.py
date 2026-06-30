@@ -105,6 +105,15 @@ class PgClient:
             ).fetchone()
         return int(row[0]) if row else 0
 
+    def is_imported(self, name: str) -> bool:
+        """True when a prior migration run completed fully (imported_at IS NOT NULL)."""
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT imported_at IS NOT NULL FROM collections_registry WHERE collection = %s",
+                (name,),
+            ).fetchone()
+        return bool(row and row[0])
+
     def create_collection(self, name: str) -> "CollectionHandle":
         pname = _partition_name(name)
         with self._pool.connection() as conn:

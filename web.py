@@ -913,7 +913,7 @@ def main():
     parser.add_argument("--max-cache-size", type=int, default=15, metavar="N",
                         help="Max collections held in memory at once; evicts LRU (default: 15)")
     parser.add_argument("--max-cache-bytes", type=int, default=None, metavar="N",
-                        help="Max bytes for collection index cache (byte-budget LRU eviction; overrides --max-cache-size when set)")
+                        help="Connection-count cap for the collection cache (overrides --max-cache-size when set; Postgres shared_buffers handles page eviction)")
     parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=5000, help="Port (default: 5000)")
     parser.add_argument("--api-key", default=None,

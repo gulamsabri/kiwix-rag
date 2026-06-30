@@ -4,8 +4,10 @@
 Reads vectors via the ChromaDB Python API (NOT the backing SQLite — vectors
 live in HNSW binary segment files and are only readable through the API),
 streams them in batches to PgClient.upsert, marks each collection imported in
-collections_registry. Resumable: collections already present in pgvector
-(count > 0) are skipped unless --rebuild is passed.
+collections_registry. Resumable: a collection is skipped only when its
+`imported_at` is set (i.e. the previous run completed fully). A crash
+mid-collection leaves `imported_at = NULL`, so the rerun re-imports from
+offset 0 — safe because upsert is idempotent (ON CONFLICT DO UPDATE).
 
 Usage:
     python migrate_chroma_to_pg.py --chroma-path ./vector_db --dsn postgresql:///kiwix_rag
@@ -53,14 +55,17 @@ def main() -> int:
             if args.rebuild and args.rebuild != name:
                 continue
             col = cclient.get_collection(name)
-            existing_count = pg.count(name)
             if args.rebuild == name:
                 print(f"[{name}] --rebuild: dropping existing partition", flush=True)
                 pg.delete_collection(name)
                 pg.create_collection(name)
-            elif existing_count > 0:
+            elif pg.is_imported(name):
+                existing_count = pg.count(name)
                 print(f"[{name}] already imported ({existing_count:,} vectors) — skip", flush=True)
                 continue
+            elif pg.count(name) > 0:
+                print(f"[{name}] partial import ({pg.count(name):,} vectors, imported_at NULL) — re-importing from start", flush=True)
+                pg.create_collection(name)
             else:
                 pg.create_collection(name)
 

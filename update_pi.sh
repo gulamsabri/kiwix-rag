@@ -75,15 +75,15 @@ if $sync_services; then
     echo "━━━ Syncing systemd services ━━━"
     for f in kiwix-rag.service kiwix-serve.service caddy-kiwix.service; do
         if [ -f "$SCRIPTS_SRC/$f" ]; then
-            cp "$SCRIPTS_SRC/$f" "/etc/systemd/system/$f" && echo "  $f → /etc/systemd/system/"
+            cp "$SCRIPTS_SRC/$f" "$SCRIPTS_DEST/$f" && echo "  $f → $SCRIPTS_DEST/"
         fi
     done
-    # Also deploy Caddy config if present
+    # Also stage Caddy config if present
     if [ -f "$SCRIPTS_SRC/Caddyfile" ]; then
-        sudo cp "$SCRIPTS_SRC/Caddyfile" /etc/caddy/Caddyfile && echo "  Caddyfile → /etc/caddy/"
+        cp "$SCRIPTS_SRC/Caddyfile" "$SCRIPTS_DEST/Caddyfile" && echo "  Caddyfile → $SCRIPTS_DEST/"
     fi
-    echo "  Reloaded systemd daemons."
-    sudo systemctl daemon-reload
+    echo "  Services staged on SSD. Deploy on the Pi after reconnecting:"
+    echo "    ssh $PI 'sudo cp ~/kiwix-rag-project/kiwix-rag.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart kiwix-rag'"
     echo ""
 fi
 
