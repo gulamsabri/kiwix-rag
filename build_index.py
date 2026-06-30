@@ -14,7 +14,7 @@ from pathlib import Path
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-import chromadb
+import pg_client
 from sentence_transformers import SentenceTransformer
 
 EMBED_MODEL = "all-MiniLM-L6-v2"  # 80MB, fast, runs well on Pi 5
@@ -146,9 +146,9 @@ def main():
     )
     parser.add_argument("jsonl_file", help="Path to the .jsonl chunks file")
     parser.add_argument(
-        "--db", "-d",
-        default=str(Path(__file__).parent / "vector_db"),
-        help="Directory for the ChromaDB database (default: ./vector_db next to this script)",
+        "--dsn", "-d",
+        default="postgresql:///kiwix_rag",
+        help="Postgres DSN (default: postgresql:///kiwix_rag)",
     )
     parser.add_argument(
         "--collection", "-c",
@@ -165,14 +165,11 @@ def main():
         print(f"Error: file not found: {jsonl_path}", file=sys.stderr)
         sys.exit(1)
 
-    db_path = Path(args.db).expanduser().resolve()
-    db_path.mkdir(parents=True, exist_ok=True)
-
     collection_name = args.collection or jsonl_path.stem.replace("-", "_").replace(".", "_")
     build_name = f"{collection_name}__building"
 
     print(f"Input:      {jsonl_path}")
-    print(f"Database:   {db_path}")
+    print(f"DSN:        {args.dsn}")
     print(f"Collection: {collection_name}")
     print(f"Model:      {EMBED_MODEL}")
     print()
@@ -200,55 +197,30 @@ def main():
     print("  Model ready")
     print()
 
-    # Build into a temp collection so the live collection is untouched until success
-    collection = client.get_or_create_collection(
-        build_name,
-        metadata={"hnsw:space": "cosine"},
-    )
+    client = pg_client.PgClient(args.dsn)
+    # Replace existing collection so re-runs are idempotent
+    if collection_name in client.list_collections():
+        client.delete_collection(collection_name)
+    collection = client.create_collection(collection_name)
 
-    print(f"Embedding and indexing {total:,} chunks in batches of {BATCH_SIZE}...")
-    done = 0
-    batch_texts, batch_meta, batch_ids = [], [], []
-
-    for chunk in iter_chunks(jsonl_path):
-        batch_texts.append(chunk["text"])
-        batch_meta.append({
-            "source": chunk["source"],
-            "title": chunk["title"],
-            "is_accepted": chunk.get("is_accepted", False),
-        })
-        batch_ids.append(str(done))
-        done += 1
-
-        if len(batch_texts) >= BATCH_SIZE:
-            embeddings = model.encode(batch_texts, show_progress_bar=False).tolist()
-            collection.add(
-                ids=batch_ids,
-                embeddings=embeddings,
-                documents=batch_texts,
-                metadatas=batch_meta,
-            )
-            print(f"\r  {done:,} / {total:,}", end="", flush=True)
-            batch_texts, batch_meta, batch_ids = [], [], []
-
-    if batch_texts:
-        embeddings = model.encode(batch_texts, show_progress_bar=False).tolist()
-        collection.add(
-            ids=batch_ids,
+    print(f"Embedding and indexing {len(chunks):,} chunks in batches of {BATCH_SIZE}...")
+    for i in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[i : i + BATCH_SIZE]
+        texts = [c["text"] for c in batch]
+        embeddings = model.encode(texts, show_progress_bar=False).tolist()
+        collection.upsert(
+            ids=[str(i + j) for j in range(len(batch))],
             embeddings=embeddings,
-            documents=batch_texts,
-            metadatas=batch_meta,
+            documents=texts,
+            metadatas=[{"source": c["source"], "title": c["title"],
+                        "is_accepted": c.get("is_accepted", False)} for c in batch],
         )
-        print(f"\r  {done:,} / {total:,}", end="", flush=True)
+        done = min(i + BATCH_SIZE, len(chunks))
+        print(f"\r  {done:,} / {len(chunks):,}", end="", flush=True)
 
-    print(f"\n\nEmbedding complete — {collection.count():,} vectors in temp collection.")
-    print()
-
-    swap_collection(client, build_name, collection_name, total)
-
-    final = client.get_collection(collection_name)
-    print(f"Done — {final.count():,} vectors in collection '{collection_name}'")
-    print(f"Database saved to {db_path}")
+    print(f"\n\nDone — {collection.count():,} vectors in collection '{collection_name}'")
+    print(f"Stored in Postgres at {args.dsn}")
+    client.close()
 
 
 if __name__ == "__main__":

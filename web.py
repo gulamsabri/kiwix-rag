@@ -13,23 +13,24 @@ Usage:
 import argparse
 import json
 import os
-import sqlite3
+import random
+import subprocess
 import sys
 import time
 import threading
+from collections import defaultdict
 from pathlib import Path
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 
 import numpy as np
-import chromadb
+import pg_client
 import requests
 from flask import Flask, Response, render_template, request
 from sentence_transformers import SentenceTransformer
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
-DB_PATH        = Path(__file__).parent / "vector_db"
 EMBED_MODEL    = "all-MiniLM-L6-v2"
 OLLAMA_URL     = "http://localhost:11434"
 LLM_MODEL      = "phi3:mini"
@@ -46,6 +47,56 @@ GROUP_TTL      = 600   # seconds before an idle collection is evicted from memor
 #   Once done, --max-collection-size limit can be relaxed or removed.
 # TODO option 4: add NVMe SSD to Pi 5 via PCIe HAT (~$15-30)
 #   Pairs with option 3; makes mmap storage fast enough for production use.
+
+# ── API key helpers ───────────────────────────────────────────────────────────
+
+_API_KEY_FILE = Path.home() / ".config" / "kiwix-rag-api-key"
+
+
+def _generate_or_load_api_key() -> str:
+    """Generate a random API key if none exists, or load the stored one."""
+    if _API_KEY_FILE.exists():
+        return _API_KEY_FILE.read_text().strip()
+    key = "kiwix-" + "".join(
+        random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=48)
+    )
+    _API_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _API_KEY_FILE.write_text(key)
+    _API_KEY_FILE.chmod(0o600)
+    print(f"  API key generated at {_API_KEY_FILE}", flush=True)
+    return key
+
+
+def _get_tailscale_ip() -> str | None:
+    """Fetch the Pi's Tailscale IPv4 address."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"],
+            capture_output=True, text=True, timeout=10,
+        )
+        ip = result.stdout.strip().split("\n")[0]
+        if ip and not ip.startswith("100.") and not ip.startswith("100-"):
+            return None
+        return ip if ip else None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def _require_api_key(expected_key: str):
+    """Check the request for a valid API key. Returns None if OK, else a Flask response."""
+    key = request.headers.get("X-API-Key") or request.args.get("key")
+    if not key:
+        return Response(
+            json.dumps({"error": "missing API key. Provide via X-API-Key header or ?key=…"}),
+            status=401, mimetype="application/json",
+        )
+    if key != expected_key:
+        return Response(
+            json.dumps({"error": "invalid API key"}),
+            status=403, mimetype="application/json",
+        )
+    return None
+
 
 SYSTEM_PROMPT = (
     "You are a reference assistant for survivors in a post-collapse world where "
@@ -490,11 +541,36 @@ GROUPS = {
     },
 }
 
+# ── rate limiter (simple per-IP token bucket) ─────────────────────────────────
+
+_rate_limits = defaultdict(list)
+_DEMO_ORIGIN = "https://freeseizures.pages.dev"
+
+
+def _check_rate_limit(ip, max_requests=30, window=60):
+    """Reject if more than max_requests in the last `window` seconds."""
+    now = time.time()
+    _rate_limits[ip] = [t for t in _rate_limits[ip] if now - t < window]
+    if len(_rate_limits[ip]) >= max_requests:
+        return False
+    _rate_limits[ip].append(now)
+    return True
+
+
+def _cors_headers():
+    """Return a dict of CORS headers for cross-origin demo access."""
+    return {
+        "Access-Control-Allow-Origin": _DEMO_ORIGIN,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+
 # ── application state ─────────────────────────────────────────────────────────
 
 app = Flask(__name__)
 _embedder        = None
-_client          = None         # shared chromadb.PersistentClient
+_client          = None         # shared pg_client.PgClient
 _all_names       = []           # all permitted collection names
 _col_cache       = {}           # name → {"col": Collection, "last_used": float}
 _col_lock        = threading.Lock()
@@ -574,12 +650,16 @@ def _ensure_loaded(names: list[str]) -> dict:
     with _col_lock:
         for n in names:
             if n not in _col_cache:
-                # Evict LRU entry when cache is at capacity
                 cap = _args.max_cache_size
+                if _args.max_cache_bytes is not None:
+                    # --max-cache-bytes now behaves as a connection-count cap
+                    # (Postgres' buffer manager handles actual page eviction).
+                    cap = _args.max_cache_bytes
                 if cap and len(_col_cache) >= cap:
                     lru = min(_col_cache, key=lambda k: _col_cache[k]["last_used"])
                     del _col_cache[lru]
-                _col_cache[n] = {"col": _client.get_collection(n), "last_used": now}
+                    print(f"  [cache] evicted: {lru}", flush=True)
+                _col_cache[n] = {"col": _client.get_collection(n), "last_used": now, "size": 0}
                 print(f"  [cache] loaded: {n}", flush=True)
             else:
                 _col_cache[n]["last_used"] = now
@@ -603,7 +683,7 @@ def _eviction_loop() -> None:
 
 def retrieve(query: str, k: int) -> list[dict]:
     q_norm = _embedder.encode([query], normalize_embeddings=True)
-    q_vec  = q_norm.tolist()
+    q_vec  = q_norm[0].tolist()
 
     groups        = _route_query(q_norm[0])
     seen_names: set[str] = set()
@@ -626,19 +706,16 @@ def retrieve(query: str, k: int) -> list[dict]:
     for col in cols_to_search:
         try:
             results = col.query(
-                query_embeddings=q_vec, n_results=k,
-                include=["documents", "metadatas", "distances"],
+                embedding=q_vec, k=k,
             )
         except Exception as e:
             print(f"  skipping '{col.name}': {e}", flush=True)
             continue
-        for doc, meta, dist in zip(
-            results["documents"][0], results["metadatas"][0], results["distances"][0]
-        ):
+        for r in results:
             candidates.append({
-                "text": doc, "source": meta["source"],
-                "title": meta["title"], "dist": dist,
-                "is_accepted": meta.get("is_accepted", False),
+                "text": r["document"], "source": r["source"],
+                "title": r["title"], "dist": r["dist"],
+                "is_accepted": r.get("is_accepted", False),
                 "zim": col.name.removesuffix("_chunks"),
             })
 
@@ -742,17 +819,36 @@ def ask():
 @app.route("/api/ask", methods=["POST"])
 def api_ask():
     """Non-streaming JSON endpoint for automated testing and evaluation."""
+    # ── API key authentication ──────────────────────────────────────────
+    auth_error = _require_api_key(_args.api_key)
+    if auth_error:
+        return auth_error
+
     data = request.get_json(silent=True) or {}
     question = data.get("question", "").strip()
     if not question:
         return {"error": "no question provided"}, 400
 
+    # ── Query length + rate limiting for demo access ────────────────────
+    if len(question) > 500:
+        return {"error": "query too long (max 500 characters)"}, 400
+
+    if not _check_rate_limit(request.remote_addr, max_requests=30, window=60):
+        return {"error": "too many requests, try again in a minute"}, 429
+
     t0 = time.time()
     print(f"Q (api): {question}", flush=True)
     chunks = retrieve(question, _args.top_k)
     if not chunks:
-        return {"answer": "", "sources": [], "groups": [], "elapsed": round(time.time() - t0, 1),
+        resp = {"answer": "", "sources": [], "groups": [], "elapsed": round(time.time() - t0, 1),
                 "error": "no relevant content found"}
+        response = app.response_class(
+            response=json.dumps(resp),
+            status=200,
+            mimetype="application/json",
+        )
+        response.headers.update(_cors_headers())
+        return response
 
     payload = {
         "model": _args.model,
@@ -775,11 +871,18 @@ def api_ask():
             seen.append(entry)
             sources.append(entry)
 
-    return {
+    resp = {
         "answer": answer,
         "sources": sources,
         "elapsed": round(time.time() - t0, 1),
     }
+    response = app.response_class(
+        response=json.dumps(resp),
+        status=200,
+        mimetype="application/json",
+    )
+    response.headers.update(_cors_headers())
+    return response
 
 
 # ── startup ───────────────────────────────────────────────────────────────────
@@ -788,7 +891,8 @@ def main():
     global _embedder, _client, _all_names, _args
 
     parser = argparse.ArgumentParser(description="Kiwix RAG web interface.")
-    parser.add_argument("--db", default=str(DB_PATH), help=f"ChromaDB path (default: {DB_PATH})")
+    parser.add_argument("--dsn", default="postgresql:///kiwix_rag",
+                        help="Postgres DSN (default: postgresql:///kiwix_rag)")
     parser.add_argument("--collection", "-c", action="append", dest="collections",
                         metavar="NAME", help="Collection(s) to search (default: all)")
     parser.add_argument("--model", "-m", default=LLM_MODEL, help=f"Ollama model (default: {LLM_MODEL})")
@@ -808,18 +912,40 @@ def main():
                         help="Max collections to search per group per query (default: 15)")
     parser.add_argument("--max-cache-size", type=int, default=15, metavar="N",
                         help="Max collections held in memory at once; evicts LRU (default: 15)")
-    parser.add_argument("--host", default="127.0.0.1",
-                        help="Bind host (default: 127.0.0.1; use 0.0.0.0 to serve the LAN)")
+    parser.add_argument("--max-cache-bytes", type=int, default=None, metavar="N",
+                        help="Connection-count cap for the collection cache (overrides --max-cache-size when set; Postgres shared_buffers handles page eviction)")
+    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=5000, help="Port (default: 5000)")
+    parser.add_argument("--api-key", default=None,
+                        help="API key for /api/ask authentication. If omitted, a key is "
+                             "auto-generated and saved to ~/.config/kiwix-rag-api-key.")
+    parser.add_argument("--bind-to-tailscale", action="store_true",
+                        help="Bind Flask to the Pi's Tailscale IP instead of 0.0.0.0. "
+                             "Requires Tailscale to be installed and running.")
     _args = parser.parse_args()
+
+    # ── resolve API key ───────────────────────────────────────────────────
+    if _args.api_key:
+        print(f"Using provided API key for /api/ask (prefix: {_args.api_key[:8]}…)", flush=True)
+    else:
+        _args.api_key = _generate_or_load_api_key()
+
+    # ── resolve bind host ─────────────────────────────────────────────────
+    if _args.bind_to_tailscale:
+        ts_ip = _get_tailscale_ip()
+        if ts_ip:
+            _args.host = ts_ip
+            print(f"  Bound to Tailscale IP: {_args.host}", flush=True)
+        else:
+            print("  Warning: --bind-to-tailscale enabled but Tailscale IP not found. "
+                  "Falling back to 0.0.0.0. Install and authenticate Tailscale first.", flush=True)
 
     print("Loading embedding model...", end=" ", flush=True)
     _embedder = SentenceTransformer(_args.embed_model)
     print("ready")
 
-    db_path = Path(_args.db).expanduser()
-    client  = chromadb.PersistentClient(path=str(db_path))
-    available = [c.name for c in client.list_collections()]
+    client = pg_client.PgClient(_args.dsn)
+    available = client.list_collections()
     if not available:
         print("No collections found. Run build_index.py first.")
         sys.exit(1)
@@ -831,14 +957,7 @@ def main():
         sys.exit(1)
 
     if _args.max_collection_size is not None:
-        # Use per-collection count() calls rather than one bulk SQL aggregate.
-        # The aggregate query does a full scan of the entire embeddings table;
-        # individual count() calls hit a per-segment index and are much faster
-        # on large databases served from a USB SSD.
-        print(f"Checking collection sizes (max {_args.max_collection_size:,})...")
-        sizes = {}
-        for n in names:
-            sizes[n] = client.get_collection(n).count()
+        sizes = {n: client.count(n) for n in names}
         skipped = [n for n in names if not (0 < sizes.get(n, 0) <= _args.max_collection_size)]
         names   = [n for n in names if  0 < sizes.get(n, 0) <= _args.max_collection_size]
         if skipped:

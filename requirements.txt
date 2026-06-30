@@ -1,5 +1,9 @@
 # Core
 chromadb
+# Postgres + pgvector (replaces chromadb at runtime)
+psycopg[binary]>=3.1
+psycopg-pool>=3.2
+pgvector>=0.3
 sentence-transformers
 flask
 requests
